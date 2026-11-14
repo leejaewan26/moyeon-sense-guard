@@ -1,0 +1,13 @@
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.kotlin/
+# 서명 키·비밀번호는 저장소 밖(../keystore)에 둔다
+*.jks
+*.keystore
+keystore.properties

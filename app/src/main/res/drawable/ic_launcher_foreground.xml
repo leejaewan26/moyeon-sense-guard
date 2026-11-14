@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 방패 -->
+    <path android:fillColor="#FF4FC3F7"
+        android:pathData="M54,24 L78,33 L78,52 C78,68 67,79 54,84 C41,79 30,68 30,52 L30,33 Z"/>
+    <!-- 열선 물결 -->
+    <path android:strokeColor="#FF10141A" android:strokeWidth="4" android:strokeLineCap="round"
+        android:pathData="M44,46 C40,52 48,56 44,62 M54,46 C50,52 58,56 54,62 M64,46 C60,52 68,56 64,62"/>
+</vector>
