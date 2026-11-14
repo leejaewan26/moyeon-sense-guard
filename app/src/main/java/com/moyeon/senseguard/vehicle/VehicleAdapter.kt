@@ -4,11 +4,10 @@ import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.api.model.capability.AreaBounds
 import ai.pleos.playground.vehicle.constant.area.SeatValue
-import ai.pleos.playground.vehicle.constant.control.VehicleGear
 import ai.pleos.playground.vehicle.constant.unit.TemperatureUnit
-import ai.pleos.playground.vehicle.listener.GearSelectionListener
 import ai.pleos.playground.vehicle.listener.HvacSeatTemperatureListener
 import ai.pleos.playground.vehicle.listener.HvacTemperatureListener
+import android.car.VehicleGear
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +19,7 @@ import com.moyeon.senseguard.engine.Seat
 /**
  * Pleos Vehicle SDK 2.3.2 연결. 콜백은 모두 메인 스레드로 넘긴다.
  * 실패해도 앱이 죽지 않게 모든 호출을 감싸고, 결과를 [Sink.onSdkLog] 로 화면에 남긴다.
+ * 기어: Pleos Gear 도메인은 SDK 2.3.2에서 deprecated·공개 문서 제외 → SDK 안내대로 AAOS 표준 GEAR_SELECTION(CarPropertyManager)으로 읽음([GearSelectionReader]).
  */
 class VehicleAdapter(context: Context, private val sink: Sink) {
 
@@ -39,10 +39,16 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
     var seatHeatBounds: Map<Seat, IntRange> = emptyMap()
         private set
 
-    private val gearListener = object : GearSelectionListener {
-        override fun onSelected(gear: VehicleGear?) = post { sink.onGear(gear.toGear()) }
-        override fun onFailed(e: Exception) = post { log(false, "registerGearSelection 콜백 실패: ${e.msg()}") }
-    }
+    private var lastGearLog: String? = null
+    private val gearReader = GearSelectionReader(
+        appContext,
+        onGear = { raw -> post { sink.onGear(raw.toGear()) } },
+        onResult = { api, ok, detail ->
+            // 같은 값 이벤트가 반복되면 기록을 한 번만 남긴다.
+            val line = "$api: $detail"
+            if (line != lastGearLog) { lastGearLog = line; log(ok, line) }
+        },
+    )
 
     private val heatListeners: Map<Seat, HvacSeatTemperatureListener> = HEAT_SEATS.associateWith { seat ->
         object : HvacSeatTemperatureListener {
@@ -65,10 +71,10 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
 
     private val registeredHeat = mutableSetOf<Seat>()
     private val registeredTemp = mutableSetOf<Seat>()
-    private var gearRegistered = false
 
     fun start() {
         if (connected) return
+        gearReader.start()
         val v = try {
             Vehicle(appContext).also { it.initialize() }
         } catch (e: Throwable) {
@@ -79,10 +85,6 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
         connected = true
         log(true, "Vehicle.initialize() 성공")
 
-        call("Gear.registerGearSelection") {
-            v.getGear().registerGearSelection(gearListener)
-            gearRegistered = true
-        }
         call("Seat.checkSeatTemperatureCapabilities") {
             v.getSeat().checkSeatTemperatureCapabilities(
                 { bounds: Map<SeatArea, AreaBounds<Int>> -> post { onHeatBounds(bounds) } },
@@ -106,13 +108,8 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
 
     /** 지금 값을 한 번 읽는다(get 계열). */
     fun refresh() {
+        gearReader.refresh()
         val v = vehicle ?: return
-        call("Gear.getCurrentGearSelectionState") {
-            v.getGear().getCurrentGearSelectionState(
-                { g: VehicleGear? -> post { log(true, "기어 읽음: ${g?.name}"); sink.onGear(g.toGear()) } },
-                { e: Exception -> post { log(false, "getCurrentGearSelectionState 실패: ${e.msg()}") } },
-            )
-        }
         for (seat in HEAT_SEATS) {
             call("Seat.getHvacSeatTemperature(${seat.label})") {
                 v.getSeat().getHvacSeatTemperature(
@@ -159,15 +156,15 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
     }
 
     fun release() {
+        gearReader.stop()
         val v = vehicle ?: return
-        if (gearRegistered) call("Gear.unregisterGearSelection") { v.getGear().unregisterGearSelection(gearListener) }
         for (seat in registeredHeat) call("Seat.unregisterHvacSeatTemperature") {
             v.getSeat().unregisterHvacSeatTemperature(seat.area(), heatListeners.getValue(seat))
         }
         for (seat in registeredTemp) call("HVAC.unregisterHvacTemperature") {
             v.getHVAC().unregisterHvacTemperature(seat.area(), tempListeners.getValue(seat))
         }
-        registeredHeat.clear(); registeredTemp.clear(); gearRegistered = false
+        registeredHeat.clear(); registeredTemp.clear()
         call("Vehicle.release") { v.release() }
         vehicle = null
         connected = false
@@ -224,11 +221,12 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
             else -> null
         }
 
-        fun VehicleGear?.toGear(): Gear = when (this) {
+        /** android.car.VehicleGear(Int) → 엔진 기어. GEAR_DRIVE·GEAR_1..9 는 D. */
+        fun Int.toGear(): Gear = when (this) {
             VehicleGear.GEAR_PARK -> Gear.P
             VehicleGear.GEAR_REVERSE -> Gear.R
             VehicleGear.GEAR_NEUTRAL -> Gear.N
-            null, VehicleGear.GEAR_UNKNOWN -> Gear.UNKNOWN
+            VehicleGear.GEAR_UNKNOWN -> Gear.UNKNOWN
             else -> Gear.D
         }
 

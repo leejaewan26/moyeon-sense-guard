@@ -18,6 +18,8 @@ val hasReleaseKey = keystorePropsFile.exists() &&
 android {
     namespace = "com.moyeon.senseguard"
     compileSdk = 35
+    // 기어: AAOS 표준 CarPropertyManager(GEAR_SELECTION). android.car 는 플랫폼 공용 라이브러리라 컴파일에만 쓴다.
+    useLibrary("android.car")
 
     defaultConfig {
         applicationId = "com.moyeon.senseguard"

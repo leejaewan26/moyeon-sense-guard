@@ -84,7 +84,7 @@ sh ./gradlew test assembleRelease
 | `pleos.car.permission.CONTROL_CAR_SEATS` | 열선 쓰기 |
 | `pleos.car.permission.CAR_CLIMATE` | 실내 설정 온도 읽기·구독 |
 | `pleos.car.permission.CONTROL_CAR_CLIMATE` | 실내 설정 온도 쓰기 |
-| `pleos.car.permission.CAR_DRIVE`, `CAR_POWERTRAIN` | 기어 상태 읽기 |
+| `android.car.permission.CAR_POWERTRAIN` | 기어 상태 읽기·구독 (AAOS 표준 `GEAR_SELECTION`) |
 
 ## APK 위치
 
@@ -95,8 +95,8 @@ sh ./gradlew test assembleRelease
 | 기능 | API (Vehicle SDK 2.3.2) |
 |---|---|
 | SDK 연결·해제 | `Vehicle(context).initialize()`, `Vehicle.release()` |
-| 기어 상태 읽기 | `getGear().getCurrentGearSelectionState(onComplete, onFailed)` |
-| 기어 변화 구독 | `getGear().registerGearSelection(GearSelectionListener)` / `unregisterGearSelection` |
+| 기어 상태 읽기 | `CarPropertyManager.getProperty(VehiclePropertyIds.GEAR_SELECTION, 0)` (AAOS 표준, `android.car.VehicleGear`) |
+| 기어 변화 구독 | `CarPropertyManager.registerCallback(callback, VehiclePropertyIds.GEAR_SELECTION, SENSOR_RATE_ONCHANGE)` / `unregisterCallback` |
 | 열선 범위 확인 | `getSeat().checkSeatTemperatureCapabilities(onComplete, onFailed)` |
 | 열선 값 읽기 | `getSeat().getHvacSeatTemperature(SeatArea, onComplete, onFailed)` |
 | 열선 변화 구독 | `getSeat().registerHvacSeatTemperature(SeatArea, HvacSeatTemperatureListener)` / `unregisterHvacSeatTemperature` |
@@ -105,11 +105,13 @@ sh ./gradlew test assembleRelease
 | 실내 설정 온도 구독 | `getHVAC().registerHvacTemperature(SeatArea, HvacTemperatureListener)` / `unregisterHvacTemperature` |
 | 실내 온도 깎기 | `getHVAC().setHvacTemperature(SeatArea, Float, TemperatureUnit.CELSIUS, onComplete, onFailed)` |
 
+Pleos Gear 도메인은 SDK 2.3.2에서 deprecated·공개 문서 제외 → SDK 안내대로 AAOS 표준 GEAR_SELECTION(CarPropertyManager)으로 읽음. `Car.createCar(context)` → `getCarManager(Car.PROPERTY_SERVICE)` 로 얻고, 호출은 전용 스레드에서 합니다.
+
 좌석 매핑: 운전석 `ROW_1_LEFT`, 조수석 `ROW_1_RIGHT`, 2열 `ROW_2_LEFT` / `ROW_2_RIGHT`.
 
 ## 에뮬레이터에서 확인한 것 / 한계
 
-- 됨: `initialize`, 기어 읽기(GEAR_PARK), 열선 범위(앞좌석 -3~3, 2열 0~3), 열선 읽기·구독(초기값 0), `setHvacSeatTemperature` 의 onComplete 성공 콜백.
+- 됨: `initialize`, 기어 읽기(AAOS `GEAR_SELECTION` getProperty = 4 GEAR_PARK, registerCallback 등록 성공·등록 직후 PARK 이벤트 수신), 열선 범위(앞좌석 -3~3, 2열 0~3), 열선 읽기·구독(초기값 0), `setHvacSeatTemperature` 의 onComplete 성공 콜백.
 - 확인 안 됨: `setHvacSeatTemperature` 성공 콜백 뒤에도 같은 좌석을 다시 읽으면 0이고 변화 콜백도 오지 않았습니다. 에뮬레이터가 값을 실제로 바꾸지 않는 것으로 보입니다(실차 미확인).
 - 안 됨: 실내 설정 온도(`HVAC_TEMPERATURE_SET`) 읽기·구독은 `PropertyNotAvailableException` 을 냅니다(공조 꺼짐 상태로 추정). 앱은 죽지 않고 화면의 SDK 호출 기록에 오류를 그대로 남깁니다.
 - 콜백에 '누가 바꿨는지'가 없어서, 본인이 올린 것과 다른 사람이 올린 것을 구분하지 못합니다. 메아리 판별은 "우리가 쓴 값과 같은 값이 처음 들어오면 메아리"로 합니다.

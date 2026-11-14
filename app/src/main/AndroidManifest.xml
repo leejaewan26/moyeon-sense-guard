@@ -8,9 +8,8 @@
     <!-- 실내 온도 읽기·쓰기 -->
     <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
-    <!-- 기어 상태 읽기 -->
-    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
-    <uses-permission android:name="pleos.car.permission.CAR_POWERTRAIN" />
+    <!-- 기어 상태 읽기: AAOS 표준 GEAR_SELECTION(CarPropertyManager) -->
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
 
     <application
         android:allowBackup="false"
@@ -19,6 +18,8 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SenseGuard">
+        <!-- CarPropertyManager(android.car) 런타임 라이브러리. 없는 기기에서도 설치는 되게 required=false -->
+        <uses-library android:name="android.car" android:required="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
