@@ -6,6 +6,7 @@ import com.moyeon.senseguard.engine.GuardProfile
 import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.ItemKind
 import com.moyeon.senseguard.engine.Seat
+import com.moyeon.senseguard.engine.fmt
 import kotlin.math.roundToInt
 
 data class SdkLog(val timeMs: Long, val ok: Boolean, val text: String)
@@ -47,9 +48,11 @@ data class UiState(
     val nowMs: Long = 0,
     /** 시나리오 중 이벤트 시각을 "시연 +mm:ss" 로 보여 주기 위한 기준. 재생 중이 아니면 null. */
     val scenarioStartMs: Long? = null,
+    /** 마지막 시험 입력 한 줄(«시험 입력 · 실제 차 신호 아님 · …»). 들어온 적 없으면 null. */
+    val testInput: String? = null,
 )
 
 fun fmtValue(item: ItemKey, v: Float): String = when (item.kind) {
     ItemKind.SEAT_HEAT -> "${v.roundToInt()}단"
-    ItemKind.CABIN_TEMP -> "${if (v == v.toInt().toFloat()) v.toInt().toString() else "%.1f".format(v)}°C"
+    ItemKind.CABIN_TEMP -> "${fmt(v)}°C"
 }

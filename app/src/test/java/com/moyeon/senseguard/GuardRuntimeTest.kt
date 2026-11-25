@@ -6,8 +6,10 @@ import com.moyeon.senseguard.engine.GuardProfile
 import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.Seat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -57,7 +59,7 @@ class GuardRuntimeTest {
     private val clock = FakeClock()
     private val sound = CountingSound()
 
-    private fun runtime(profile: GuardProfile = GuardProfile()): Pair<GuardRuntime, MemRepo> {
+    private fun runtime(profile: GuardProfile = GuardProfile(), car: FakeCar = this.car): Pair<GuardRuntime, MemRepo> {
         val repo = MemRepo(profile)
         val rt = GuardRuntime(car, clock, sound, repo)
         rt.start()
@@ -141,5 +143,63 @@ class GuardRuntimeTest {
         car.sink.onGear(Gear.P)
         rt.restoreOnExit()
         assertEquals(listOf(driverHeat to 2f, driverHeat to 3f), car.writes)
+    }
+
+    // ---- 시험 입력(티켓 02) ----
+
+    @Test
+    fun `시험 입력은 SDK 콜백과 같은 쓰기와 같은 이벤트를 낸다`() {
+        val sdkCar = FakeCar()
+        val (viaSdk, _) = runtime(car = sdkCar)
+        sdkCar.sink.onGear(Gear.D)
+        sdkCar.sink.onValue(driverHeat, 3f)
+
+        val testCar = FakeCar()
+        val (viaTest, _) = runtime(car = testCar)
+        viaTest.onTestInput(gear = "D", seat = null, kind = null, value = null)
+        viaTest.onTestInput(gear = null, seat = "driver", kind = "heat", value = "3")
+
+        assertEquals(listOf(driverHeat to 2f), testCar.writes)
+        assertEquals(sdkCar.writes, testCar.writes)
+        assertEquals(viaSdk.state.value.events, viaTest.state.value.events)
+        assertEquals(viaSdk.state.value.values, viaTest.state.value.values)
+    }
+
+    @Test
+    fun `시험 입력이 들어오면 화면과 SDK 기록에 시험 입력 표시가 남는다`() {
+        val (rt, _) = runtime()
+        assertNull(rt.state.value.testInput)
+        rt.onTestInput(gear = null, seat = "driver", kind = "heat", value = "3")
+
+        assertEquals("시험 입력 · 실제 차 신호 아님 · 운전석 열선 3단", rt.state.value.testInput)
+        val line = rt.state.value.sdkLogs.first { "시험 입력" in it.text }
+        assertEquals("시험 입력 · 실제 차 신호 아님 · 운전석 열선 3단", line.text)
+    }
+
+    @Test
+    fun `잘못된 시험 입력은 엔진에 안 들어가고 거절 이유가 SDK 기록에 남는다`() {
+        val (rt, _) = runtime()
+        car.sink.onGear(Gear.D)
+        rt.onTestInput(gear = null, seat = "driver", kind = "heat", value = "9")
+
+        assertTrue(car.writes.isEmpty())
+        assertNull(rt.state.value.values[driverHeat])
+        assertNull(rt.state.value.testInput)
+        val first = rt.state.value.sdkLogs.first()
+        assertFalse(first.ok)
+        assertTrue(first.text, first.text.startsWith("시험 입력 거절") && "-3~3" in first.text)
+    }
+
+    @Test
+    fun `시나리오 재생 중에는 시험 입력을 받지 않는다`() {
+        val (rt, _) = runtime()
+        car.sink.onGear(Gear.D)
+        rt.startScenario()
+        rt.onTestInput(gear = null, seat = "driver", kind = "heat", value = "3")
+
+        assertTrue(car.writes.isEmpty())
+        val first = rt.state.value.sdkLogs.first()
+        assertFalse(first.ok)
+        assertTrue(first.text, first.text.startsWith("시험 입력 거절") && "시나리오" in first.text)
     }
 }
