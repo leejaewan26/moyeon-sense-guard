@@ -52,7 +52,7 @@ fun SenseGuardApp(vm: GuardViewModel, initialTab: Tab = Tab.DASHBOARD) {
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             T("감각 가드", 42.sp, C.Accent, FontWeight.ExtraBold)
-            T("앱이 켜져 있는 동안\n내 몸 기준 상한을 지킵니다", 22.sp, C.Sub)
+            T("화면을 닫아도\n내 몸 기준 상한을 지킵니다", 22.sp, C.Sub)
             Spacer(Modifier.height(12.dp))
             for (t in Tab.entries) {
                 val selected = t == tab

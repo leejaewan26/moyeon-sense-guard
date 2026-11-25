@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.moyeon.senseguard.GuardViewModel
+import com.moyeon.senseguard.fmtValue
 import com.moyeon.senseguard.engine.EventKind
 import com.moyeon.senseguard.engine.Gear
 import com.moyeon.senseguard.engine.ItemKey
@@ -43,7 +44,7 @@ fun DashboardScreen(vm: GuardViewModel) {
                     26.sp,
                 )
                 T("• 알림: ${p.alertMode.label} · 주행 중엔 못 풂 · P단에서 본인만 풀기", 26.sp)
-                T("앱이 켜져 있는 동안 지킵니다", 24.sp, C.Sub)
+                T("화면을 닫아도 상시 서비스가 지킵니다 · 차가 켜지면 저절로 시작", 24.sp, C.Sub)
             }
 
             Card {
@@ -109,7 +110,7 @@ fun DashboardScreen(vm: GuardViewModel) {
         ) {
             Card {
                 SectionTitle("최근 깎은 기록")
-                val start = vm.scenarioStartMs()
+                val start = ui.scenarioStartMs
                 val shown = ui.events.filter { it.kind != EventKind.INFO }.take(10)
                 if (shown.isEmpty()) T("아직 없어요", 26.sp, C.Sub)
                 for (e in shown) {
@@ -124,7 +125,7 @@ fun DashboardScreen(vm: GuardViewModel) {
                         T(timeLabel(e.timeMs, start), 22.sp, C.Sub)
                         Column {
                             val change = if (e.kind != EventKind.SUGGEST && e.item != null && e.from != null && e.to != null)
-                                "${e.item.label} ${GuardViewModel.fmtValue(e.item, e.from)} → ${GuardViewModel.fmtValue(e.item, e.to)}" else null
+                                "${e.item.label} ${fmtValue(e.item, e.from)} → ${fmtValue(e.item, e.to)}" else null
                             if (change != null) T(change, 26.sp, color, FontWeight.Bold)
                             T(e.text, 24.sp, if (change == null) color else C.Text)
                         }

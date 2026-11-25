@@ -10,6 +10,11 @@
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
     <!-- 기어 상태 읽기: AAOS 표준 GEAR_SELECTION(CarPropertyManager) -->
     <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+    <!-- 상시 서비스(화면을 닫아도 지킴)와 부팅 뒤 자동 시작 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -30,6 +35,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".GuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="척수장애 운전자의 좌석 열선·실내 온도 상한을 차량 신호로 상시 지킴" />
+        </service>
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
