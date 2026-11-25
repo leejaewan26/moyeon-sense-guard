@@ -247,7 +247,9 @@ class GuardRuntime(
 
     // ---- 차에서 들어오는 신호 ----
 
+    // 멈춘 뒤(stop) 늦게 도착한 차 콜백은 버린다 — 다시 켜면(start) 차 연결이 새로 읽어 준다.
     override fun onGear(gear: Gear) {
+        if (!started) return
         realGear = gear
         if (run != null) return
         val before = live.gear
@@ -258,6 +260,7 @@ class GuardRuntime(
 
     /** 재생 중에는 재생 엔진으로 보낸다: 재생 엔진이 쓴 값의 메아리를 거르기 위해서다. */
     override fun onValue(item: ItemKey, value: Float) {
+        if (!started) return
         val r = run
         if (r != null) handle(r.engine, r.engine.onValue(item, value, r.virtualNow))
         else handle(live, live.onValue(item, value, clock.wallMs()))
@@ -269,8 +272,11 @@ class GuardRuntime(
      * 화면·SDK 기록에 [TEST_INPUT_MARK] 를 남긴다. 재생 중에는 재생 화면에 섞이지 않게 받지 않는다.
      */
     fun onTestInput(gear: String?, seat: String?, kind: String?, value: String?) {
-        val input = if (run != null) TestInput.Rejected("시나리오 재생 중이에요. 멈춘 뒤 넣으세요")
-        else parseTestInput(gear, seat, kind, value, car.seatHeatBounds)
+        val input = when {
+            !started -> TestInput.Rejected("가드가 꺼져 있어요. 앱을 먼저 여세요")
+            run != null -> TestInput.Rejected("시나리오 재생 중이에요. 멈춘 뒤 넣으세요")
+            else -> parseTestInput(gear, seat, kind, value, car.seatHeatBounds)
+        }
         when (input) {
             is TestInput.Rejected -> onSdkLog(false, "시험 입력 거절 · ${input.reason}")
             is TestInput.GearSignal -> {

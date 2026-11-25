@@ -54,13 +54,21 @@ class GuardService : Service() {
     override fun onCreate() {
         super.onCreate()
         runtime = GuardRuntimes.get(this)
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), FGS_TYPE)
         runtime.start()
         main.postDelayed(ticker, TICK_MS)
         Log.i(TAG, "가드 서비스 시작")
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    /** 시작 요청마다 알림을 다시 올린다 — 앱을 다시 열거나 알림 권한을 막 허용했을 때도 알림 줄에 보이게. */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), FGS_TYPE)
+        } catch (e: Exception) {
+            // 포그라운드가 거부돼도(배경 시작 제한 등) 지키는 일은 계속한다. 앱을 열면 다시 시도한다.
+            Log.w(TAG, "포그라운드 시작 실패: $e")
+        }
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         main.removeCallbacks(ticker)
@@ -97,7 +105,11 @@ class GuardService : Service() {
         private val FGS_TYPE = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
 
         fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, GuardService::class.java))
+            try {
+                ContextCompat.startForegroundService(context, Intent(context, GuardService::class.java))
+            } catch (e: Exception) {
+                Log.w(TAG, "가드 서비스 시작 요청 실패: $e")
+            }
         }
     }
 }

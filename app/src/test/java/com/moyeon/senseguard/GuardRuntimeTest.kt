@@ -260,4 +260,32 @@ class GuardRuntimeTest {
         assertFalse(first.ok)
         assertTrue(first.text, first.text.startsWith("시험 입력 거절") && "시나리오" in first.text)
     }
+
+    @Test
+    fun `가드가 꺼져 있으면 시험 입력을 거절하고 이유를 남긴다`() {
+        val (rt, _) = runtime()
+        rt.stop()
+        rt.onTestInput(gear = null, seat = "driver", kind = "heat", value = "3")
+
+        assertTrue(car.writes.isEmpty())
+        assertNull(rt.state.value.testInput)
+        val first = rt.state.value.sdkLogs.first()
+        assertFalse(first.ok)
+        assertTrue(first.text, first.text.startsWith("시험 입력 거절") && "꺼져" in first.text)
+    }
+
+    @Test
+    fun `가드를 멈춘 뒤 늦게 온 차 신호는 판정하지 않고 다시 켜면 다시 지킨다`() {
+        val (rt, _) = runtime()
+        val sink = car.sink
+        sink.onGear(Gear.D)
+        rt.stop()
+        sink.onValue(driverHeat, 3f)
+        assertTrue("멈춘 뒤에는 쓰기 없음", car.writes.isEmpty())
+        assertEquals(null, rt.state.value.values[driverHeat])
+
+        rt.start()
+        car.sink.onValue(driverHeat, 3f)
+        assertEquals(listOf(driverHeat to 2f), car.writes)
+    }
 }

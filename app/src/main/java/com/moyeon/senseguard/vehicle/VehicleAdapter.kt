@@ -37,8 +37,10 @@ class VehicleAdapter(context: Context) : CarPort {
     /** SDK 스레드에서만 만진다. */
     private var vehicle: Vehicle? = null
 
+    /** 메인 스레드에서만 바꾼다. SDK 스레드는 읽기만 한다(연결 중에 해제됐는지·다시 시도할지). */
+    @Volatile private var started = false
+
     /** 메인 스레드에서만 만진다. */
-    private var started = false
     override var connected: Boolean = false
         private set
 
@@ -88,14 +90,23 @@ class VehicleAdapter(context: Context) : CarPort {
     }
 
     private fun connectOnSdk() {
+        // 해제됐거나, 다시 시도 예약과 새 start 가 겹쳐 이미 붙었으면 건너뛴다.
+        if (!started || vehicle != null) return
         val v = try {
             Vehicle(appContext).also { it.initialize() }
         } catch (e: Throwable) {
-            log(false, "Vehicle.initialize() 실패: ${e.msg()}")
+            // 부팅 직후엔 차량 서비스가 아직 안 떴을 수 있다 → 켜져 있는 동안 계속 다시 시도한다.
+            log(false, "Vehicle.initialize() 실패: ${e.msg()} — ${RETRY_MS / 1000}초 뒤 다시 시도")
+            sdk.postDelayed({ connectOnSdk() }, RETRY_MS)
+            return
+        }
+        if (!started) {
+            // 초기화하는 사이 해제됐다 → 붙잡지 않고 바로 놓는다.
+            call("Vehicle.release") { v.release() }
             return
         }
         vehicle = v
-        post { connected = true }
+        post { if (started) connected = true }
         log(true, "Vehicle.initialize() 성공")
 
         call("Seat.checkSeatTemperatureCapabilities") {
@@ -226,6 +237,7 @@ class VehicleAdapter(context: Context) : CarPort {
 
     companion object {
         const val TAG = "SenseGuard"
+        private const val RETRY_MS = 5_000L
         val HEAT_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER, Seat.REAR_LEFT, Seat.REAR_RIGHT)
         val TEMP_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER)
 
