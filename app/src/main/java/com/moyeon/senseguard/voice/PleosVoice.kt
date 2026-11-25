@@ -61,7 +61,7 @@ class PleosVoice(context: Context) : AlertSound {
         try {
             val engine = TextToSpeech(app, Mode.ON_DEVICE)
             tts = engine
-            main.postDelayed({ if (tts === engine && policy.state == VoicePolicy.State.INITIALIZING) fail("초기화 30초 넘김") }, INIT_TIMEOUT_MS)
+            main.postDelayed({ if (tts === engine) fail("초기화 30초 넘김") }, INIT_TIMEOUT_MS)
             engine.initialize(object : OnInitializeListener {
                 override fun onSuccess() { main.post { if (tts === engine) ready(engine) } }
                 override fun onFailure(error: ErrorType) { main.post { if (tts === engine) fail("초기화 실패 $error") } }
@@ -96,9 +96,7 @@ class PleosVoice(context: Context) : AlertSound {
         }
         policy.onInitSuccess()
         Log.i(TAG, "음성 초기화 성공")
-        val pending = waiting.toList()
-        waiting.clear()
-        pending.forEach { say(it) }
+        drain().forEach { say(it) }
     }
 
     private fun say(text: String) {
@@ -116,10 +114,11 @@ class PleosVoice(context: Context) : AlertSound {
         policy.onInitFailure()
         failure = reason
         Log.w(TAG, "음성 $reason (시도 ${policy.initAttempts})")
-        val pending = waiting.toList()
-        waiting.clear()
-        pending.forEach { beep(reason) }
+        // 기다리던 말이 여럿이어도 삐 소리는 한 번(같은 소리 장치라 겹치면 앞 소리가 끊긴다).
+        if (drain().isNotEmpty()) beep(reason)
     }
+
+    private fun drain(): List<String> = waiting.toList().also { waiting.clear() }
 
     private fun speechError(reason: String) {
         if (policy.onSpeechError() == VoicePolicy.Action.BEEP) beep(reason)

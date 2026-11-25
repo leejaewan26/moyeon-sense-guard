@@ -147,7 +147,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
             val cur = _current[item] ?: continue
             val orig = original[item] ?: continue
             if (same(cur, written) && !same(cur, orig)) {
-                plan += write(item, cur, orig, "하차 · 원래 값으로", EventKind.RESTORE) as GuardAction.Write
+                plan += write(item, cur, orig, "하차 · 원래 값으로", EventKind.RESTORE)
                 log(now, EventKind.RESTORE, item, cur, orig, "하차 · ${item.label} 원래 값으로")
             } else if (!same(cur, written)) {
                 log(now, EventKind.RESTORE, item, cur, null, "하차 · ${item.label} 은 그새 바뀌어 그대로 둠")
@@ -177,7 +177,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         times.addLast(now)
 
         log(now, EventKind.CLAMP, item, value, limit, reason)
-        val actions = mutableListOf(write(item, value, limit, reason))
+        val actions = mutableListOf<GuardAction>(write(item, value, limit, reason, EventKind.CLAMP))
         if (times.size >= MAX_CLAMPS) {
             _halted += item
             val msg = "${item.label} 가드 멈춤 · 60초에 ${MAX_CLAMPS}번 깎였어요. 누군가 계속 올리고 있어요"
@@ -187,7 +187,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         return actions
     }
 
-    private fun write(item: ItemKey, from: Float, to: Float, reason: String, kind: EventKind = EventKind.CLAMP): GuardAction {
+    private fun write(item: ItemKey, from: Float, to: Float, reason: String, kind: EventKind): GuardAction.Write {
         original.putIfAbsent(item, from)
         lastWritten[item] = to
         pendingEcho[item] = to

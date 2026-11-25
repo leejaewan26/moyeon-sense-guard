@@ -2,9 +2,6 @@ package com.moyeon.senseguard
 
 import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.ItemKey
-import com.moyeon.senseguard.engine.ItemKind
-import com.moyeon.senseguard.engine.fmt
-import kotlin.math.roundToInt
 
 /**
  * 알림 한 건. [text] 는 화면 자막이자 말할 문장이다.
@@ -15,11 +12,10 @@ data class Notice(val text: String, val speakable: Boolean)
 
 /** 알림 문장. 화면 자막과 음성이 같은 글을 쓴다. */
 object Notices {
-    fun lowered(item: ItemKey, to: Float) =
-        Notice("${obj(item.label)} ${towards(spoken(item, to))} 낮췄어요. 내 설정이에요.", true)
+    fun lowered(item: ItemKey, to: Float) = Notice("${loweredTo(item, to)} 내 설정이에요.", true)
 
     fun steppedDown(item: ItemKey, to: Float, minutes: Int) =
-        Notice("${obj(item.label)} ${towards(spoken(item, to))} 낮췄어요. ${minutes}분이 지나 한 단 내렸어요.", true)
+        Notice("${loweredTo(item, to)} ${minutes}분이 지나 한 단 내렸어요.", true)
 
     fun halted(item: ItemKey) = Notice("${item.label} 가드가 멈췄어요. 누군가 계속 올리고 있어요.", true)
 
@@ -28,16 +24,15 @@ object Notices {
     fun suggested(item: ItemKey, limit: Float) =
         Notice("${topic(item.label)} ${spoken(item, limit)} 이하를 권해요. 내 자리가 아니라 바꾸지 않았어요.", false)
 
+    private fun loweredTo(item: ItemKey, to: Float) = "${obj(item.label)} ${towards(spoken(item, to))} 낮췄어요."
+
     /** 말로 읽는 값: 열선 «2단», 온도 «26도»·«25.5도»(°C 는 읽기 어색해서). */
-    private fun spoken(item: ItemKey, v: Float) = when (item.kind) {
-        ItemKind.SEAT_HEAT -> "${v.roundToInt()}단"
-        ItemKind.CABIN_TEMP -> "${fmt(v)}도"
-    }
+    private fun spoken(item: ItemKey, v: Float) = fmtValue(item, v, celsius = "도")
 
     // 조사: 마지막 글자의 받침으로 고른다.
     private fun obj(w: String) = w + if (jong(w) != 0) "을" else "를"
     private fun topic(w: String) = w + if (jong(w) != 0) "은" else "는"
-    private fun towards(w: String) = w + if (jong(w) != 0 && jong(w) != RIEUL) "으로" else "로"
+    private fun towards(w: String) = w + jong(w).let { if (it == 0 || it == RIEUL) "로" else "으로" }
 
     /** 마지막 한글 글자의 받침 번호(0 = 받침 없음). 한글이 아니면 0. */
     private fun jong(w: String): Int {

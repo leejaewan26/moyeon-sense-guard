@@ -1,6 +1,5 @@
 package com.moyeon.senseguard
 
-import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.BaselineCar
 import com.moyeon.senseguard.engine.DemoScenario
 import com.moyeon.senseguard.engine.EventKind
@@ -317,8 +316,11 @@ class GuardRuntime(
             when (a) {
                 is GuardAction.Write -> {
                     if (!silent) {
-                        val notice = if (a.kind == EventKind.STEP_DOWN) Notices.steppedDown(a.item, a.value, eng.profile.autoStepDownMinutes)
-                        else Notices.lowered(a.item, a.value)
+                        // 하차 복원(RESTORE)은 silent 로만 온다.
+                        val notice = when (a.kind) {
+                            EventKind.STEP_DOWN -> Notices.steppedDown(a.item, a.value, eng.profile.autoStepDownMinutes)
+                            else -> Notices.lowered(a.item, a.value)
+                        }
                         raise(eng, a.reason, notice, warning = false)
                     }
                     write(eng, a)
