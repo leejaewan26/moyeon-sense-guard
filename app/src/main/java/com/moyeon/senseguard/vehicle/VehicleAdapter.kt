@@ -237,7 +237,8 @@ class VehicleAdapter(context: Context) : CarPort {
 
     companion object {
         const val TAG = "SenseGuard"
-        private const val RETRY_MS = 5_000L        val HEAT_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER, Seat.REAR_LEFT, Seat.REAR_RIGHT)
+        private const val RETRY_MS = 5_000L
+        val HEAT_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER, Seat.REAR_LEFT, Seat.REAR_RIGHT)
         val TEMP_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER)
 
         fun Seat.area(): SeatArea = SeatArea(
