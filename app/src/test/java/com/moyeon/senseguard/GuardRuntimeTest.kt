@@ -142,4 +142,19 @@ class GuardRuntimeTest {
         rt.restoreOnExit()
         assertEquals(listOf(driverHeat to 2f, driverHeat to 3f), car.writes)
     }
+
+    @Test
+    fun `가드를 멈춘 뒤 늦게 온 차 신호는 판정하지 않고 다시 켜면 다시 지킨다`() {
+        val (rt, _) = runtime()
+        val sink = car.sink
+        sink.onGear(Gear.D)
+        rt.stop()
+        sink.onValue(driverHeat, 3f)
+        assertTrue("멈춘 뒤에는 쓰기 없음", car.writes.isEmpty())
+        assertEquals(null, rt.state.value.values[driverHeat])
+
+        rt.start()
+        car.sink.onValue(driverHeat, 3f)
+        assertEquals(listOf(driverHeat to 2f), car.writes)
+    }
 }
