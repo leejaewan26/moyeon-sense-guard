@@ -132,7 +132,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         val reason = "내 설정 · ${profile.autoStepDownMinutes}분 뒤 자동 하강"
         heatOnSince = if (next > 0f) now else null
         log(now, EventKind.STEP_DOWN, item, level, next, reason)
-        return listOf(write(item, level, next, reason))
+        return listOf(write(item, level, next, reason, EventKind.STEP_DOWN))
     }
 
     /** SDK 쓰기가 실패하면 메아리 대기를 지운다. */
@@ -147,7 +147,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
             val cur = _current[item] ?: continue
             val orig = original[item] ?: continue
             if (same(cur, written) && !same(cur, orig)) {
-                plan += write(item, cur, orig, "하차 · 원래 값으로") as GuardAction.Write
+                plan += write(item, cur, orig, "하차 · 원래 값으로", EventKind.RESTORE) as GuardAction.Write
                 log(now, EventKind.RESTORE, item, cur, orig, "하차 · ${item.label} 원래 값으로")
             } else if (!same(cur, written)) {
                 log(now, EventKind.RESTORE, item, cur, null, "하차 · ${item.label} 은 그새 바뀌어 그대로 둠")
@@ -187,12 +187,12 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         return actions
     }
 
-    private fun write(item: ItemKey, from: Float, to: Float, reason: String): GuardAction {
+    private fun write(item: ItemKey, from: Float, to: Float, reason: String, kind: EventKind = EventKind.CLAMP): GuardAction {
         original.putIfAbsent(item, from)
         lastWritten[item] = to
         pendingEcho[item] = to
         _current[item] = to
-        return GuardAction.Write(item, to, reason)
+        return GuardAction.Write(item, to, reason, kind)
     }
 
     private fun updateHeatTimer(prev: Float?, value: Float, now: Long) {

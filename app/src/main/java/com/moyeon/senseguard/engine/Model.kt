@@ -61,7 +61,8 @@ data class GuardEvent(
 
 /** 엔진이 어댑터에게 내리는 지시. 엔진은 직접 쓰지 않는다. */
 sealed interface GuardAction {
-    data class Write(val item: ItemKey, val value: Float, val reason: String) : GuardAction
+    /** [kind]: 깎음(CLAMP)·자동 하강(STEP_DOWN)·하차 복원(RESTORE) — 알림 문장을 고르는 데 쓴다. */
+    data class Write(val item: ItemKey, val value: Float, val reason: String, val kind: EventKind = EventKind.CLAMP) : GuardAction
     data class Suggest(val item: ItemKey, val requested: Float, val suggested: Float, val reason: String) : GuardAction
     data class Halted(val item: ItemKey, val message: String) : GuardAction
 }

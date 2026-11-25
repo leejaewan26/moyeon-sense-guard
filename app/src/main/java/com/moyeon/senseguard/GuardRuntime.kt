@@ -3,6 +3,7 @@ package com.moyeon.senseguard
 import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.BaselineCar
 import com.moyeon.senseguard.engine.DemoScenario
+import com.moyeon.senseguard.engine.EventKind
 import com.moyeon.senseguard.engine.Gear
 import com.moyeon.senseguard.engine.GuardAction
 import com.moyeon.senseguard.engine.GuardEngine
@@ -41,7 +42,9 @@ interface RuntimeClock {
 
 /** 알림 소리. 프로세스와 수명이 같다(따로 해제하지 않는다). */
 interface AlertSound {
-    fun clamp()
+    /** 문장을 말한다. 음성이 안 되면 구현이 삐 소리로 대신한다. */
+    fun speak(text: String)
+    /** 기사 화면 경고 삐 소리. */
     fun warning()
 }
 
@@ -71,6 +74,7 @@ class GuardRuntime(
     private var driver = DriverUi()
     private var speed = 30
     private var testInput: String? = null
+    private val voice = VoiceRule()
 
     /** 시나리오 재생 중이면 별도 엔진 인스턴스(같은 클래스)와 가상 시계를 쓴다. */
     private class Run(
@@ -207,8 +211,9 @@ class GuardRuntime(
 
     fun rearm(item: ItemKey) {
         val r = run
-        if (r != null) handle(r.engine, r.engine.rearm(item, r.virtualNow))
-        else handle(live, live.rearm(item, clock.wallMs()))
+        val eng = r?.engine ?: live
+        if (item in eng.halted) raise(eng, "${item.label} 가드 다시 켜짐", Notices.rearmed(item), warning = false)
+        handle(eng, eng.rearm(item, r?.virtualNow ?: clock.wallMs()))
         publish()
     }
 
@@ -305,16 +310,20 @@ class GuardRuntime(
         for (a in actions) {
             when (a) {
                 is GuardAction.Write -> {
-                    if (!silent) raise(eng, a.reason, "${a.item.label} → ${fmtValue(a.item, a.value)}", warning = false)
+                    if (!silent) {
+                        val notice = if (a.kind == EventKind.STEP_DOWN) Notices.steppedDown(a.item, a.value, eng.profile.autoStepDownMinutes)
+                        else Notices.lowered(a.item, a.value)
+                        raise(eng, a.reason, notice, warning = false)
+                    }
                     write(eng, a)
                 }
                 is GuardAction.Suggest -> {
                     val last = alert
                     if (last == null || clock.elapsedMs() - last.atRealMs > 4_000) {
-                        raise(eng, "제안 · ${a.item.label} ${fmtValue(a.item, a.suggested)} 이하 권장", "내 자리가 아니라 바꾸지 않았어요", warning = false, sound = false)
+                        raise(eng, "제안 · ${a.item.label} ${fmtValue(a.item, a.suggested)} 이하 권장", Notices.suggested(a.item, a.suggested), warning = false)
                     }
                 }
-                is GuardAction.Halted -> raise(eng, a.message, "같은 항목을 60초에 3번 깎아 이 항목 가드를 멈췄어요", warning = true)
+                is GuardAction.Halted -> raise(eng, a.message, Notices.halted(a.item), warning = true)
             }
         }
     }
@@ -327,11 +336,11 @@ class GuardRuntime(
         }
     }
 
-    private fun raise(eng: GuardEngine, headline: String, detail: String, warning: Boolean, sound: Boolean = true) {
-        alert = AlertBanner(headline, detail, warning, clock.elapsedMs())
-        if (sound && eng.profile.alertMode == AlertMode.SOUND) {
-            if (warning) this.sound.warning() else this.sound.clamp()
-        }
+    /** 경고 띠(자막)는 언제나 올리고, 말할지는 [VoiceRule] 이 정한다(소리 프로필 · 말할 일 · 같은 말 30초에 한 번). */
+    private fun raise(eng: GuardEngine, headline: String, notice: Notice, warning: Boolean) {
+        val speak = voice.shouldSpeak(notice, eng.profile.alertMode, clock.elapsedMs())
+        alert = AlertBanner(headline, notice.text, warning, clock.elapsedMs(), spoken = speak)
+        if (speak) sound.speak(notice.text)
     }
 
     private fun log(ok: Boolean, text: String) {

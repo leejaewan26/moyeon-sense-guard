@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Pleos Vehicle SDK 권한 (protectionLevel="normal"). 감각 가드가 쓰는 것만. -->
     <!-- 열선 읽기·쓰기 -->
@@ -10,6 +11,9 @@
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
     <!-- 기어 상태 읽기: AAOS 표준 GEAR_SELECTION(CarPropertyManager) -->
     <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+    <!-- 음성 알림: Pleos TextToSpeech. 기기 안(ON_DEVICE) 방식이라 인터넷 권한은 뺀다(SDK 가 더하는 것을 지움). -->
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <!-- 상시 서비스(화면을 닫아도 지킴)와 부팅 뒤 자동 시작 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />

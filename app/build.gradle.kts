@@ -74,6 +74,8 @@ android {
 
 dependencies {
     implementation(libs.vehicle.sdk)
+    // 음성 알림: Pleos TextToSpeech(기기 안 방식). SDK 가 더하는 INTERNET 권한은 매니페스트에서 뺀다.
+    implementation(libs.tts.sdk)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -122,7 +122,7 @@ private fun AlertStrip(vm: GuardViewModel) {
             T(alert.headline, 44.sp, C.Text, FontWeight.ExtraBold)
             T(alert.detail, 28.sp, C.Text)
         }
-        T(if (lightText) "빛·글자 알림" else "소리 알림", 22.sp, C.Text)
+        T(if (alert.spoken) "말로 알림" else "자막 알림", 22.sp, C.Text)
         T("닫기", 26.sp, C.Text, FontWeight.Bold)
     }
 }
