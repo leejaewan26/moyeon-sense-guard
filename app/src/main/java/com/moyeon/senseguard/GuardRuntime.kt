@@ -70,6 +70,7 @@ class GuardRuntime(
     private var alert: AlertBanner? = null
     private var driver = DriverUi()
     private var speed = 30
+    private var testInput: String? = null
 
     /** 시나리오 재생 중이면 별도 엔진 인스턴스(같은 클래스)와 가상 시계를 쓴다. */
     private class Run(
@@ -261,6 +262,36 @@ class GuardRuntime(
         publish()
     }
 
+    /**
+     * 밖에서 넣는 시험 입력(디버그 빌드 수신기가 부른다). 해석한 신호는 SDK 콜백과 같은 입구로 넣고,
+     * 화면·SDK 기록에 [TEST_INPUT_MARK] 를 남긴다. 재생 중에는 재생 화면에 섞이지 않게 받지 않는다.
+     */
+    fun onTestInput(gear: String?, seat: String?, kind: String?, value: String?) {
+        val input = when {
+            !started -> TestInput.Rejected("가드가 꺼져 있어요. 앱을 먼저 여세요")
+            run != null -> TestInput.Rejected("시나리오 재생 중이에요. 멈춘 뒤 넣으세요")
+            else -> parseTestInput(gear, seat, kind, value, car.seatHeatBounds)
+        }
+        when (input) {
+            is TestInput.Rejected -> onSdkLog(false, "시험 입력 거절 · ${input.reason}")
+            is TestInput.GearSignal -> {
+                markTestInput("기어 ${input.gear.label}")
+                onGear(input.gear)
+            }
+            is TestInput.ValueSignal -> {
+                markTestInput("${input.item.label} ${fmtValue(input.item, input.value)}")
+                onValue(input.item, input.value)
+            }
+        }
+    }
+
+    /** 한 줄을 SDK 기록과 화면 띠가 같이 쓴다. 프로세스가 살아 있는 동안 띠에 남는다. */
+    private fun markTestInput(text: String) {
+        val line = "$TEST_INPUT_MARK · $text"
+        testInput = line
+        log(true, line)
+    }
+
     override fun onSdkLog(ok: Boolean, text: String) {
         log(ok, text)
         publish()
@@ -352,6 +383,7 @@ class GuardRuntime(
             driver = driver,
             nowMs = now,
             scenarioStartMs = r?.startVirtual,
+            testInput = testInput,
         )
     }
 }

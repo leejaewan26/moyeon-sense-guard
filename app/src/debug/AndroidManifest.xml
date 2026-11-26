@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 디버그 빌드에만 합쳐지는 매니페스트. release 빌드는 시험 입력을 받지 않는다. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- 시험 입력: adb shell(DUMP 권한 보유)만 보낼 수 있다. -->
+        <receiver
+            android:name=".TestInputReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.moyeon.senseguard.TEST_INPUT" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

@@ -95,6 +95,7 @@ private fun TopBar(vm: GuardViewModel) {
             val a by blink.animateFloat(1f, 0.35f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "scnA")
             Box(Modifier.alpha(a)) { Badge("시나리오 재생 중 · 가상 신호 (실제 신호 아님)", C.Mock, big = true) }
         }
+        ui.testInput?.let { Badge(it, C.Mock, big = true) }
         Spacer(Modifier.weight(1f))
         T("${ui.profile.roleLabel} · ${ui.profile.seat.label} 기준", 26.sp, C.Sub)
     }

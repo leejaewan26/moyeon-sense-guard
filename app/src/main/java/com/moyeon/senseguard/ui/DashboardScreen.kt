@@ -48,7 +48,13 @@ fun DashboardScreen(vm: GuardViewModel) {
             }
 
             Card {
-                SectionTitle(if (ui.scenario != null) "좌석 값 · 시나리오 가상 값 포함" else "차에서 읽은 값")
+                SectionTitle(
+                    when {
+                        ui.scenario != null -> "좌석 값 · 시나리오 가상 값 포함"
+                        ui.testInput != null -> "차에서 읽은 값 · 시험 입력 포함"
+                        else -> "차에서 읽은 값"
+                    },
+                )
                 val mine = ItemKey.heat(p.seat)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     for (seat in listOf(Seat.DRIVER, Seat.FRONT_PASSENGER, Seat.REAR_LEFT, Seat.REAR_RIGHT)) {
