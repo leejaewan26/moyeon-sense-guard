@@ -8,10 +8,10 @@ import com.moyeon.senseguard.engine.GuardProfile
 import com.moyeon.senseguard.engine.Seat
 
 /** 규칙 프로필을 기기 안 SharedPreferences 에만 저장한다(서버 없음). */
-class ProfileStore(context: Context) {
+class ProfileStore(context: Context) : ProfileRepo {
     private val prefs = context.getSharedPreferences("sense_guard_profile", Context.MODE_PRIVATE)
 
-    fun load(): GuardProfile {
+    override fun load(): GuardProfile {
         val d = GuardProfile()
         return GuardProfile(
             maxHeatLevel = prefs.getInt("maxHeatLevel", d.maxHeatLevel),
@@ -22,7 +22,7 @@ class ProfileStore(context: Context) {
         )
     }
 
-    fun save(p: GuardProfile) {
+    override fun save(p: GuardProfile) {
         prefs.edit()
             .putInt("maxHeatLevel", p.maxHeatLevel)
             .putInt("autoStepDownMinutes", p.autoStepDownMinutes)
@@ -33,19 +33,15 @@ class ProfileStore(context: Context) {
     }
 }
 
-/** 소리 알림. TextToSpeech SDK 대신 안드로이드 기본 ToneGenerator 를 쓴다. */
-class Beeper {
+/** 소리 알림. TextToSpeech SDK 대신 안드로이드 기본 ToneGenerator 를 쓴다. 프로세스와 수명이 같다. */
+class Beeper : AlertSound {
     private val tone: ToneGenerator? = runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }.getOrNull()
 
-    fun clamp() {
+    override fun clamp() {
         runCatching { tone?.startTone(ToneGenerator.TONE_PROP_BEEP2, 350) }
     }
 
-    fun warning() {
+    override fun warning() {
         runCatching { tone?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 900) }
-    }
-
-    fun release() {
-        runCatching { tone?.release() }
     }
 }

@@ -10,39 +10,48 @@ import ai.pleos.playground.vehicle.listener.HvacTemperatureListener
 import android.car.VehicleGear
 import android.content.Context
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
+import com.moyeon.senseguard.CarPort
+import com.moyeon.senseguard.CarSink
 import com.moyeon.senseguard.engine.Gear
 import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.Seat
 
 /**
  * Pleos Vehicle SDK 2.3.2 연결. 콜백은 모두 메인 스레드로 넘긴다.
- * 실패해도 앱이 죽지 않게 모든 호출을 감싸고, 결과를 [Sink.onSdkLog] 로 화면에 남긴다.
+ * SDK 호출(초기화·등록·읽기·쓰기·해제)은 전용 스레드 하나에서 차례로 한다 — 에뮬레이터에서 초기화·등록이
+ * 메인 스레드를 약 7초 막아 화면이 «응답 없음»(ANR)이 됐다(2026-11-25 실측). [vehicle]·등록 목록은 그 스레드에서만 만진다.
+ * 실패해도 앱이 죽지 않게 모든 호출을 감싸고, 결과를 [CarSink.onSdkLog] 로 화면에 남긴다.
  * 기어: Pleos Gear 도메인은 SDK 2.3.2에서 deprecated·공개 문서 제외 → SDK 안내대로 AAOS 표준 GEAR_SELECTION(CarPropertyManager)으로 읽음([GearSelectionReader]).
  */
-class VehicleAdapter(context: Context, private val sink: Sink) {
+class VehicleAdapter(context: Context) : CarPort {
 
-    interface Sink {
-        fun onGear(gear: Gear)
-        fun onValue(item: ItemKey, value: Float)
-        fun onSdkLog(ok: Boolean, text: String)
-    }
-
+    /** [start] 에서 받는다. 그 전에 온 콜백·기록은 버린다. */
+    private var sink: CarSink? = null
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
+    private val sdk = Handler(HandlerThread("car-sdk").apply { start() }.looper)
+
+    /** SDK 스레드에서만 만진다. */
     private var vehicle: Vehicle? = null
-    var connected: Boolean = false
+
+    /** 메인 스레드에서만 바꾼다. SDK 스레드는 읽기만 한다(연결 중에 해제됐는지·다시 시도할지). */
+    @Volatile private var started = false
+
+    /** 메인 스레드에서만 만진다. */
+    override var connected: Boolean = false
         private set
 
     /** 열선 단계 범위(차가 알려 준 값). 모르면 null. */
-    var seatHeatBounds: Map<Seat, IntRange> = emptyMap()
+    override var seatHeatBounds: Map<Seat, IntRange> = emptyMap()
         private set
 
     private var lastGearLog: String? = null
     private val gearReader = GearSelectionReader(
         appContext,
-        onGear = { raw -> post { sink.onGear(raw.toGear()) } },
+        onGear = { raw -> post { sink?.onGear(raw.toGear()) } },
         onResult = { api, ok, detail ->
             // 같은 값 이벤트가 반복되면 기록을 한 번만 남긴다.
             val line = "$api: $detail"
@@ -54,7 +63,7 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
         object : HvacSeatTemperatureListener {
             override fun onHvacSeatTemperatureUpdated(level: Int?) {
                 Log.i(TAG, "열선 콜백 ${seat.label} = $level")
-                if (level != null) post { sink.onValue(ItemKey.heat(seat), level.toFloat()) }
+                if (level != null) post { sink?.onValue(ItemKey.heat(seat), level.toFloat()) }
             }
             override fun onFailed(e: Exception) = post { log(false, "${seat.label} 열선 콜백 실패: ${e.msg()}") }
         }
@@ -63,7 +72,7 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
     private val tempListeners: Map<Seat, HvacTemperatureListener> = TEMP_SEATS.associateWith { seat ->
         object : HvacTemperatureListener {
             override fun onHvacTemperatureUpdated(value: Float?) {
-                if (value != null) post { sink.onValue(ItemKey.temp(seat), value) }
+                if (value != null) post { sink?.onValue(ItemKey.temp(seat), value) }
             }
             override fun onFailed(e: Exception) = post { log(false, "${seat.label} 온도 콜백 실패: ${e.msg()}") }
         }
@@ -72,17 +81,32 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
     private val registeredHeat = mutableSetOf<Seat>()
     private val registeredTemp = mutableSetOf<Seat>()
 
-    fun start() {
-        if (connected) return
+    override fun start(sink: CarSink) {
+        this.sink = sink
+        if (started) return
+        started = true
         gearReader.start()
+        sdk.post { connectOnSdk() }
+    }
+
+    private fun connectOnSdk() {
+        // 해제됐거나, 다시 시도 예약과 새 start 가 겹쳐 이미 붙었으면 건너뛴다.
+        if (!started || vehicle != null) return
         val v = try {
             Vehicle(appContext).also { it.initialize() }
         } catch (e: Throwable) {
-            log(false, "Vehicle.initialize() 실패: ${e.msg()}")
+            // 부팅 직후엔 차량 서비스가 아직 안 떴을 수 있다 → 켜져 있는 동안 계속 다시 시도한다.
+            log(false, "Vehicle.initialize() 실패: ${e.msg()} — ${RETRY_MS / 1000}초 뒤 다시 시도")
+            sdk.postDelayed({ connectOnSdk() }, RETRY_MS)
+            return
+        }
+        if (!started) {
+            // 초기화하는 사이 해제됐다 → 붙잡지 않고 바로 놓는다.
+            call("Vehicle.release") { v.release() }
             return
         }
         vehicle = v
-        connected = true
+        post { if (started) connected = true }
         log(true, "Vehicle.initialize() 성공")
 
         call("Seat.checkSeatTemperatureCapabilities") {
@@ -103,18 +127,22 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
                 registeredTemp += seat
             }
         }
-        refresh()
+        readOnSdk()
     }
 
     /** 지금 값을 한 번 읽는다(get 계열). */
-    fun refresh() {
+    override fun refresh() {
         gearReader.refresh()
+        sdk.post { readOnSdk() }
+    }
+
+    private fun readOnSdk() {
         val v = vehicle ?: return
         for (seat in HEAT_SEATS) {
             call("Seat.getHvacSeatTemperature(${seat.label})") {
                 v.getSeat().getHvacSeatTemperature(
                     seat.area(),
-                    { level: Int? -> Log.i(TAG, "열선 읽음 ${seat.label} = $level"); if (level != null) post { sink.onValue(ItemKey.heat(seat), level.toFloat()) } },
+                    { level: Int? -> Log.i(TAG, "열선 읽음 ${seat.label} = $level"); if (level != null) post { sink?.onValue(ItemKey.heat(seat), level.toFloat()) } },
                     { e: Exception -> post { log(false, "getHvacSeatTemperature(${seat.label}) 실패: ${e.msg()}") } },
                 )
             }
@@ -123,51 +151,59 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
             call("HVAC.getHvacTemperature(${seat.label})") {
                 v.getHVAC().getHvacTemperature(
                     seat.area(), TemperatureUnit.CELSIUS,
-                    { t: Float? -> if (t != null) post { sink.onValue(ItemKey.temp(seat), t) } },
+                    { t: Float? -> if (t != null) post { sink?.onValue(ItemKey.temp(seat), t) } },
                     { e: Exception -> post { log(false, "getHvacTemperature(${seat.label}) 실패: ${e.msg()}") } },
                 )
             }
         }
     }
 
-    /** 열선 쓰기. 결과는 onResult(성공 여부). */
-    fun setSeatHeat(seat: Seat, level: Int, onResult: (Boolean) -> Unit) {
-        val v = vehicle ?: return onResult(false)
-        val ok = call("Seat.setHvacSeatTemperature(${seat.label}, $level)") {
-            v.getSeat().setHvacSeatTemperature(
-                seat.area(), level,
-                { _: SeatArea?, value: Int? -> post { log(true, "setHvacSeatTemperature(${seat.label}) → $value"); onResult(true) } },
-                { e: Exception -> post { log(false, "setHvacSeatTemperature(${seat.label}, $level) 실패: ${e.msg()}"); onResult(false) } },
-            )
+    /** 열선 쓰기. 결과는 메인 스레드에서 onResult(성공 여부). */
+    override fun setSeatHeat(seat: Seat, level: Int, onResult: (Boolean) -> Unit) {
+        sdk.post {
+            val v = vehicle
+            val ok = v != null && call("Seat.setHvacSeatTemperature(${seat.label}, $level)") {
+                v.getSeat().setHvacSeatTemperature(
+                    seat.area(), level,
+                    { _: SeatArea?, value: Int? -> post { log(true, "setHvacSeatTemperature(${seat.label}) → $value"); onResult(true) } },
+                    { e: Exception -> post { log(false, "setHvacSeatTemperature(${seat.label}, $level) 실패: ${e.msg()}"); onResult(false) } },
+                )
+            }
+            if (!ok) post { onResult(false) }
         }
-        if (!ok) onResult(false)
     }
 
-    fun setCabinTemp(seat: Seat, celsius: Float, onResult: (Boolean) -> Unit) {
-        val v = vehicle ?: return onResult(false)
-        val ok = call("HVAC.setHvacTemperature(${seat.label}, $celsius)") {
-            v.getHVAC().setHvacTemperature(
-                seat.area(), celsius, TemperatureUnit.CELSIUS,
-                { _: SeatArea?, value: Float? -> post { log(true, "setHvacTemperature(${seat.label}) → $value"); onResult(true) } },
-                { e: Exception -> post { log(false, "setHvacTemperature(${seat.label}, $celsius) 실패: ${e.msg()}"); onResult(false) } },
-            )
+    override fun setCabinTemp(seat: Seat, celsius: Float, onResult: (Boolean) -> Unit) {
+        sdk.post {
+            val v = vehicle
+            val ok = v != null && call("HVAC.setHvacTemperature(${seat.label}, $celsius)") {
+                v.getHVAC().setHvacTemperature(
+                    seat.area(), celsius, TemperatureUnit.CELSIUS,
+                    { _: SeatArea?, value: Float? -> post { log(true, "setHvacTemperature(${seat.label}) → $value"); onResult(true) } },
+                    { e: Exception -> post { log(false, "setHvacTemperature(${seat.label}, $celsius) 실패: ${e.msg()}"); onResult(false) } },
+                )
+            }
+            if (!ok) post { onResult(false) }
         }
-        if (!ok) onResult(false)
     }
 
-    fun release() {
-        gearReader.stop()
-        val v = vehicle ?: return
-        for (seat in registeredHeat) call("Seat.unregisterHvacSeatTemperature") {
-            v.getSeat().unregisterHvacSeatTemperature(seat.area(), heatListeners.getValue(seat))
-        }
-        for (seat in registeredTemp) call("HVAC.unregisterHvacTemperature") {
-            v.getHVAC().unregisterHvacTemperature(seat.area(), tempListeners.getValue(seat))
-        }
-        registeredHeat.clear(); registeredTemp.clear()
-        call("Vehicle.release") { v.release() }
-        vehicle = null
+    override fun release() {
+        if (!started) return
+        started = false
         connected = false
+        gearReader.stop()
+        sdk.post {
+            val v = vehicle ?: return@post
+            for (seat in registeredHeat) call("Seat.unregisterHvacSeatTemperature") {
+                v.getSeat().unregisterHvacSeatTemperature(seat.area(), heatListeners.getValue(seat))
+            }
+            for (seat in registeredTemp) call("HVAC.unregisterHvacTemperature") {
+                v.getHVAC().unregisterHvacTemperature(seat.area(), tempListeners.getValue(seat))
+            }
+            registeredHeat.clear(); registeredTemp.clear()
+            call("Vehicle.release") { v.release() }
+            vehicle = null
+        }
     }
 
     private fun onHeatBounds(bounds: Map<SeatArea, AreaBounds<Int>>) {
@@ -196,11 +232,12 @@ class VehicleAdapter(context: Context, private val sink: Sink) {
 
     private fun log(ok: Boolean, text: String) {
         if (ok) Log.i(TAG, text) else Log.w(TAG, text)
-        post { sink.onSdkLog(ok, text) }
+        post { sink?.onSdkLog(ok, text) }
     }
 
     companion object {
         const val TAG = "SenseGuard"
+        private const val RETRY_MS = 5_000L
         val HEAT_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER, Seat.REAR_LEFT, Seat.REAR_RIGHT)
         val TEMP_SEATS = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER)
 

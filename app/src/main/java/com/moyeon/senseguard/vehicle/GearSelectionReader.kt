@@ -69,6 +69,7 @@ class GearSelectionReader(
         bg.post { readNow() }
     }
 
+    /** 구독만 푼다. 스레드는 프로세스와 수명이 같다 — 서비스가 다시 뜨면 같은 리더로 [start] 한다. */
     fun stop() {
         bg.post {
             val m = cpm
@@ -77,7 +78,6 @@ class GearSelectionReader(
             runCatching { car?.disconnect() }
             car = null
             cpm = null
-            worker.quitSafely()
         }
     }
 
