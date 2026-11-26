@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.moyeon.senseguard.vehicle.VehicleAdapter
+import com.moyeon.senseguard.voice.PleosVoice
 
 /** 프로세스에 런타임 하나. 서비스와 화면이 같은 것을 쓴다. 메인 스레드에서만 부른다. */
 object GuardRuntimes {
@@ -26,7 +27,7 @@ object GuardRuntimes {
 
     fun get(context: Context): GuardRuntime = instance ?: run {
         val app = context.applicationContext
-        GuardRuntime(VehicleAdapter(app), SystemRuntimeClock, Beeper(), ProfileStore(app)).also { instance = it }
+        GuardRuntime(VehicleAdapter(app), SystemRuntimeClock, PleosVoice(app).also { it.warmUp() }, ProfileStore(app)).also { instance = it }
     }
 }
 

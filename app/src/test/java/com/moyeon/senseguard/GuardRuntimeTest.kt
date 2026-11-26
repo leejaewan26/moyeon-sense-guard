@@ -43,11 +43,14 @@ class GuardRuntimeTest {
     }
 
     private class CountingSound : AlertSound {
-        var clamps = 0
+        /** 말한 문장 순서대로. */
+        val spoken = mutableListOf<String>()
         var warnings = 0
-        override fun clamp() { clamps++ }
+        override fun speak(text: String) { spoken += text }
         override fun warning() { warnings++ }
     }
+
+    private val lowered2 = "운전석 열선을 2단으로 낮췄어요. 내 설정이에요."
 
     private class MemRepo(var saved: GuardProfile = GuardProfile()) : ProfileRepo {
         var saves = 0
@@ -119,20 +122,75 @@ class GuardRuntimeTest {
     }
 
     @Test
-    fun `소리 알림 프로필은 깎을 때 삐 소리가 나고 화면에 이유가 뜬다`() {
+    fun `소리 알림 프로필은 깎을 때 그 문장을 한 번 말하고 같은 글을 자막으로 띄운다`() {
         val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.SOUND))
         car.sink.onGear(Gear.D)
         car.sink.onValue(driverHeat, 3f)
-        assertEquals(1, sound.clamps)
-        assertEquals("내 설정 · 열선 최대 2단", rt.state.value.alert?.headline)
+        assertEquals(listOf(lowered2), sound.spoken)
+        val alert = rt.state.value.alert!!
+        assertEquals("내 설정 · 열선 최대 2단", alert.headline)
+        assertEquals(lowered2, alert.detail)
+        assertTrue(alert.spoken)
     }
 
     @Test
-    fun `빛·글자 알림 프로필은 깎아도 소리가 나지 않는다`() {
-        runtime(GuardProfile(alertMode = AlertMode.LIGHT_TEXT))
+    fun `빛·글자 알림 프로필은 깎아도 말하지 않고 자막만 띄운다`() {
+        val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.LIGHT_TEXT))
         car.sink.onGear(Gear.D)
         car.sink.onValue(driverHeat, 3f)
-        assertEquals(0, sound.clamps)
+        assertTrue(sound.spoken.isEmpty())
+        assertEquals(lowered2, rt.state.value.alert?.detail)
+        assertFalse(rt.state.value.alert!!.spoken)
+    }
+
+    @Test
+    fun `30초 안에 같은 깎음이 또 일어나면 자막만 내고 30초가 지나면 다시 말한다`() {
+        val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.SOUND))
+        car.sink.onGear(Gear.D)
+        car.sink.onValue(driverHeat, 3f)
+        clock.advance(10_000)
+        car.sink.onValue(driverHeat, 3f)
+        assertEquals(listOf(lowered2), sound.spoken)
+        assertEquals(lowered2, rt.state.value.alert?.detail)
+        assertFalse(rt.state.value.alert!!.spoken)
+
+        clock.advance(60_000)
+        car.sink.onValue(driverHeat, 3f)
+        assertEquals(listOf(lowered2, lowered2), sound.spoken)
+    }
+
+    @Test
+    fun `자동 하강 때도 왜 낮췄는지 말한다`() {
+        val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.SOUND, autoStepDownMinutes = 10))
+        car.sink.onGear(Gear.D)
+        car.sink.onValue(driverHeat, 2f)
+        clock.advance(10 * min)
+        rt.tick()
+        assertEquals(listOf("운전석 열선을 1단으로 낮췄어요. 10분이 지나 한 단 내렸어요."), sound.spoken)
+    }
+
+    @Test
+    fun `가드가 멈추면 말하고 다시 켜면 다시 켰다고 말한다`() {
+        val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.SOUND))
+        car.sink.onGear(Gear.D)
+        repeat(3) {
+            car.sink.onValue(driverHeat, 3f)
+            clock.advance(10_000)
+        }
+        val halted = "운전석 열선 가드가 멈췄어요. 누군가 계속 올리고 있어요."
+        assertEquals(listOf(lowered2, halted), sound.spoken)
+
+        rt.rearm(driverHeat)
+        assertEquals("운전석 열선 가드를 다시 켰어요.", sound.spoken.last())
+    }
+
+    @Test
+    fun `다른 자리 제안은 소리 프로필이어도 말하지 않고 자막만 띄운다`() {
+        val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.SOUND))
+        car.sink.onGear(Gear.D)
+        car.sink.onValue(ItemKey.heat(Seat.FRONT_PASSENGER), 3f)
+        assertTrue(sound.spoken.isEmpty())
+        assertEquals("조수석 열선은 2단 이하를 권해요. 내 자리가 아니라 바꾸지 않았어요.", rt.state.value.alert?.detail)
     }
 
     @Test

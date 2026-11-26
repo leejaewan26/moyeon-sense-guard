@@ -11,7 +11,15 @@ import kotlin.math.roundToInt
 
 data class SdkLog(val timeMs: Long, val ok: Boolean, val text: String)
 
-data class AlertBanner(val headline: String, val detail: String, val warning: Boolean, val atRealMs: Long)
+data class AlertBanner(
+    val headline: String,
+    /** 화면 자막. 말할 일이면 말한 문장과 같다. */
+    val detail: String,
+    val warning: Boolean,
+    val atRealMs: Long,
+    /** 이번 알림을 음성으로 말했는가(아니면 자막만). */
+    val spoken: Boolean,
+)
 
 data class ScenarioUi(
     val elapsedSec: Int,
@@ -52,7 +60,8 @@ data class UiState(
     val testInput: String? = null,
 )
 
-fun fmtValue(item: ItemKey, v: Float): String = when (item.kind) {
+/** 값 표시: 열선 «2단», 온도 «26°C»(말할 때는 [celsius] = «도»). */
+fun fmtValue(item: ItemKey, v: Float, celsius: String = "°C"): String = when (item.kind) {
     ItemKind.SEAT_HEAT -> "${v.roundToInt()}단"
-    ItemKind.CABIN_TEMP -> "${fmt(v)}°C"
+    ItemKind.CABIN_TEMP -> "${fmt(v)}$celsius"
 }

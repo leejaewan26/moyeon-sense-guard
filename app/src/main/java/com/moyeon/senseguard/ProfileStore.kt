@@ -1,8 +1,6 @@
 package com.moyeon.senseguard
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
 import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.GuardProfile
 import com.moyeon.senseguard.engine.Seat
@@ -30,18 +28,5 @@ class ProfileStore(context: Context) : ProfileRepo {
             .putString("alertMode", p.alertMode.name)
             .putString("seat", p.seat.name)
             .apply()
-    }
-}
-
-/** 소리 알림. TextToSpeech SDK 대신 안드로이드 기본 ToneGenerator 를 쓴다. 프로세스와 수명이 같다. */
-class Beeper : AlertSound {
-    private val tone: ToneGenerator? = runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }.getOrNull()
-
-    override fun clamp() {
-        runCatching { tone?.startTone(ToneGenerator.TONE_PROP_BEEP2, 350) }
-    }
-
-    override fun warning() {
-        runCatching { tone?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 900) }
     }
 }
