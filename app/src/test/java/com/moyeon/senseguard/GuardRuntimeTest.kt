@@ -33,6 +33,9 @@ class GuardRuntimeTest {
         override fun setCabinTemp(seat: Seat, celsius: Float, onResult: (Boolean) -> Unit) {
             writes += ItemKey.temp(seat) to celsius; onResult(true)
         }
+        /** 통풍·에어컨을 켜라고 한 자리 순서대로. */
+        val cooled = mutableListOf<Seat>()
+        override fun startCooling(seat: Seat) { cooled += seat }
         override fun release() {}
     }
 
@@ -287,5 +290,21 @@ class GuardRuntimeTest {
         rt.start()
         car.sink.onValue(driverHeat, 3f)
         assertEquals(listOf(driverHeat to 2f), car.writes)
+    }
+
+    @Test
+    fun `지금 실내가 41도를 넘으면 경고를 띄우고 내 자리 통풍과 에어컨을 한 번만 켠다`() {
+        val (rt, _) = runtime(GuardProfile(alertMode = AlertMode.SOUND))
+        car.sink.onValue(ItemKey.now(Seat.DRIVER), 30f)
+        assertTrue(car.cooled.isEmpty())
+        car.sink.onValue(ItemKey.now(Seat.DRIVER), 48f)
+        assertEquals(listOf(Seat.DRIVER), car.cooled)
+        val alert = rt.state.value.alert
+        assertNotNull(alert)
+        assertTrue(alert!!.warning)
+        assertEquals("실내가 48도예요. 좌석이 뜨거울 수 있어요. 운전석 통풍과 에어컨을 켰어요.", sound.spoken.single())
+        car.sink.onValue(ItemKey.now(Seat.DRIVER), 50f)
+        assertEquals(1, car.cooled.size)
+        assertTrue(car.writes.isEmpty())
     }
 }

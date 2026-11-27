@@ -2,6 +2,8 @@ package com.moyeon.senseguard
 
 import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.ItemKey
+import com.moyeon.senseguard.engine.Seat
+import com.moyeon.senseguard.engine.fmt
 
 /**
  * 알림 한 건. [text] 는 화면 자막이자 말할 문장이다.
@@ -20,6 +22,9 @@ object Notices {
     fun halted(item: ItemKey) = Notice("${item.label} 가드가 멈췄어요. 누군가 계속 올리고 있어요.", true)
 
     fun rearmed(item: ItemKey) = Notice("${item.label} 가드를 다시 켰어요.", true)
+
+    fun cooling(seat: Seat, celsius: Float) =
+        Notice("실내가 ${fmt(celsius)}도예요. 좌석이 뜨거울 수 있어요. ${seat.label} 통풍과 에어컨을 켰어요.", true)
 
     fun suggested(item: ItemKey, limit: Float) =
         Notice("${topic(item.label)} ${spoken(item, limit)} 이하를 권해요. 내 자리가 아니라 바꾸지 않았어요.", false)

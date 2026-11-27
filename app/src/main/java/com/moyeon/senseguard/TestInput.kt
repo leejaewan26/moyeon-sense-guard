@@ -28,6 +28,9 @@ private fun defaultHeatRange(seat: Seat): IntRange = when (seat) {
 /** 실내 설정 온도로 받아 줄 범위(°C). 엉뚱한 값만 막는 정도 — 프로필 상한 선택지는 18~30. */
 private val TEST_TEMP_RANGE = 16f..32f
 
+/** 지금 실내 온도로 받아 줄 범위(°C). 여름 실측 최고(도로교통공단 2026.8, 대시보드 85.5°C)까지 넣을 수 있게. */
+private val TEST_NOW_RANGE = -30f..90f
+
 private const val USAGE = "기어(gear: P·R·N·D) 또는 자리·종류·값(seat·kind·value) 중 하나를 넣으세요"
 
 /**
@@ -60,7 +63,7 @@ fun parseTestInput(
     val s = parseSeat(seatText)
         ?: return TestInput.Rejected("모르는 자리 «$seatText» — driver·front_passenger·rear_left·rear_right")
     val k = parseKind(kindText)
-        ?: return TestInput.Rejected("모르는 종류 «$kindText» — heat(열선)·temp(온도)")
+        ?: return TestInput.Rejected("모르는 종류 «$kindText» — heat(열선)·temp(온도)·now(지금 실내 온도)")
     val v = valueText.toFloatOrNull()?.takeIf { it.isFinite() }
         ?: return TestInput.Rejected("값 «$valueText» 이 숫자가 아니에요")
     val item = ItemKey(k, s)
@@ -72,6 +75,8 @@ fun parseTestInput(
         }
         ItemKind.CABIN_TEMP ->
             if (v !in TEST_TEMP_RANGE) "${fmt(TEST_TEMP_RANGE.start)}~${fmt(TEST_TEMP_RANGE.endInclusive)}" else null
+        ItemKind.CABIN_NOW ->
+            if (v !in TEST_NOW_RANGE) "${fmt(TEST_NOW_RANGE.start)}~${fmt(TEST_NOW_RANGE.endInclusive)}" else null
     }
     if (outOfRange != null) return TestInput.Rejected("${item.label} ${fmtValue(item, v)}은 범위 밖이에요($outOfRange)")
     return TestInput.ValueSignal(item, v)
@@ -85,5 +90,6 @@ private fun parseSeat(text: String): Seat? {
 private fun parseKind(text: String): ItemKind? = when (text.lowercase()) {
     "heat", "열선" -> ItemKind.SEAT_HEAT
     "temp", "온도" -> ItemKind.CABIN_TEMP
+    "now", "지금온도", "지금실내" -> ItemKind.CABIN_NOW
     else -> null
 }

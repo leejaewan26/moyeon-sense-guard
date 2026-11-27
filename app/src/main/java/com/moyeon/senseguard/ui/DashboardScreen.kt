@@ -35,6 +35,7 @@ import com.moyeon.senseguard.UiState
 import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.EventKind
 import com.moyeon.senseguard.engine.Gear
+import com.moyeon.senseguard.engine.GuardEngine
 import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.Seat
 import com.moyeon.senseguard.engine.fmt
@@ -231,6 +232,11 @@ private fun SeatMap(ui: UiState) {
             "${s.label} ${ui.values[ItemKey.temp(s)]?.let { if (it > 0f) fmt(it) + "°C" else "–" } ?: "–"}"
         }
         T("실내 설정 온도   $temps", 21.sp, C.Sub, maxLines = 1)
+        val nowTemps = listOf(Seat.DRIVER, Seat.FRONT_PASSENGER).mapNotNull { s -> ui.values[ItemKey.now(s)]?.let { "${s.label} ${fmt(it)}°C" } }
+        if (nowTemps.isNotEmpty()) {
+            val hot = nowTemps.isNotEmpty() && listOf(Seat.DRIVER, Seat.FRONT_PASSENGER).any { (ui.values[ItemKey.now(it)] ?: 0f) >= GuardEngine.HOT_CABIN_C }
+            T("지금 실내 온도   ${nowTemps.joinToString("   ")}", 21.sp, if (hot) C.Danger else C.Sub, if (hot) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+        }
     }
 }
 
@@ -261,7 +267,7 @@ private fun EventList(ui: UiState) {
     for (e in shown) {
         val color = when (e.kind) {
             EventKind.CLAMP, EventKind.STEP_DOWN -> C.Heat
-            EventKind.HALT -> C.Danger
+            EventKind.HALT, EventKind.COOL -> C.Danger
             EventKind.SUGGEST -> C.Sub
             EventKind.OVERRIDE, EventKind.OVERRIDE_END -> C.Warn
             else -> C.Text

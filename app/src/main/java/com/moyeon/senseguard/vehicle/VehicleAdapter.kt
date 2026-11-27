@@ -78,8 +78,23 @@ class VehicleAdapter(context: Context) : CarPort {
         }
     }
 
+    /** 지금 실내 온도(설정값이 아니라 실제 온도). 여름 과열 판단에 쓴다. */
+    private val nowListeners: Map<Seat, HvacTemperatureListener> = TEMP_SEATS.associateWith { seat ->
+        object : HvacTemperatureListener {
+            override fun onHvacTemperatureUpdated(value: Float?) {
+                if (value != null) post { sink?.onValue(ItemKey.now(seat), value) }
+            }
+            override fun onFailed(e: Exception) = post { log(false, "${seat.label} 지금 실내 온도 콜백 실패: ${e.msg()}") }
+        }
+    }
+
     private val registeredHeat = mutableSetOf<Seat>()
     private val registeredTemp = mutableSetOf<Seat>()
+    private val registeredNow = mutableSetOf<Seat>()
+
+    /** SDK 스레드에서만 만진다. 차가 알려 준 통풍 최대 단계(자리별)와 에어컨을 켤 수 있는 구역. */
+    private var ventMax: Map<Seat, Int> = emptyMap()
+    private var acAreas: List<SeatArea> = emptyList()
 
     override fun start(sink: CarSink) {
         this.sink = sink
@@ -126,6 +141,26 @@ class VehicleAdapter(context: Context) : CarPort {
                 v.getHVAC().registerHvacTemperature(seat.area(), tempListeners.getValue(seat))
                 registeredTemp += seat
             }
+            call("HVAC.registerHvacTemperatureCurrent(${seat.label})") {
+                v.getHVAC().registerHvacTemperatureCurrent(seat.area(), nowListeners.getValue(seat))
+                registeredNow += seat
+            }
+        }
+        call("Seat.checkSeatVentilationCapabilities") {
+            v.getSeat().checkSeatVentilationCapabilities(
+                { bounds: Map<SeatArea, AreaBounds<Int>> ->
+                    val m = bounds.mapNotNull { (area, b) -> area.values.firstOrNull()?.toSeat()?.let { s -> b.maxValue?.let { s to it } } }.toMap()
+                    sdk.post { ventMax = m }
+                    log(true, "통풍 범위: " + m.entries.joinToString { "${it.key.label} 0~${it.value}" })
+                },
+                { e: Exception -> post { log(false, "checkSeatVentilationCapabilities 실패: ${e.msg()}") } },
+            )
+        }
+        call("HVAC.checkHvacAcCapabilities") {
+            v.getHVAC().checkHvacAcCapabilities(
+                { areas: List<SeatArea> -> sdk.post { acAreas = areas }; log(true, "에어컨 구역 ${areas.size}곳") },
+                { e: Exception -> post { log(false, "checkHvacAcCapabilities 실패: ${e.msg()}") } },
+            )
         }
         readOnSdk()
     }
@@ -148,6 +183,13 @@ class VehicleAdapter(context: Context) : CarPort {
             }
         }
         for (seat in TEMP_SEATS) {
+            call("HVAC.getHvacTemperatureCurrent(${seat.label})") {
+                v.getHVAC().getHvacTemperatureCurrent(
+                    seat.area(), TemperatureUnit.CELSIUS,
+                    { t: Float? -> if (t != null) post { sink?.onValue(ItemKey.now(seat), t) } },
+                    { e: Exception -> post { log(false, "getHvacTemperatureCurrent(${seat.label}) 실패: ${e.msg()}") } },
+                )
+            }
             call("HVAC.getHvacTemperature(${seat.label})") {
                 v.getHVAC().getHvacTemperature(
                     seat.area(), TemperatureUnit.CELSIUS,
@@ -187,6 +229,30 @@ class VehicleAdapter(context: Context) : CarPort {
         }
     }
 
+    /** 여름 과열: 그 자리 통풍을 차가 허락하는 최대 단계로, 에어컨을 켤 수 있는 구역은 모두 켠다. 없는 기능은 건너뛰고 기록만 남긴다. */
+    override fun startCooling(seat: Seat) {
+        sdk.post {
+            val v = vehicle ?: return@post
+            val vent = ventMax[seat]
+            if (vent == null || vent <= 0) log(false, "${seat.label} 통풍 시트 없음 · 통풍은 건너뜀")
+            else call("Seat.setHvacSeatVentilation(${seat.label}, $vent)") {
+                v.getSeat().setHvacSeatVentilation(
+                    seat.area(), vent,
+                    { _: SeatArea?, value: Int? -> log(true, "setHvacSeatVentilation(${seat.label}) → $value") },
+                    { e: Exception -> log(false, "setHvacSeatVentilation(${seat.label}, $vent) 실패: ${e.msg()}") },
+                )
+            }
+            if (acAreas.isEmpty()) log(false, "에어컨 구역을 차가 알려 주지 않음 · 에어컨은 건너뜀")
+            for (area in acAreas) call("HVAC.setHvacAc(on)") {
+                v.getHVAC().setHvacAc(
+                    area, true,
+                    { _: SeatArea?, on: Boolean? -> log(true, "setHvacAc → $on") },
+                    { e: Exception -> log(false, "setHvacAc 실패: ${e.msg()}") },
+                )
+            }
+        }
+    }
+
     override fun release() {
         if (!started) return
         started = false
@@ -200,7 +266,10 @@ class VehicleAdapter(context: Context) : CarPort {
             for (seat in registeredTemp) call("HVAC.unregisterHvacTemperature") {
                 v.getHVAC().unregisterHvacTemperature(seat.area(), tempListeners.getValue(seat))
             }
-            registeredHeat.clear(); registeredTemp.clear()
+            for (seat in registeredNow) call("HVAC.unregisterHvacTemperatureCurrent") {
+                v.getHVAC().unregisterHvacTemperatureCurrent(seat.area(), nowListeners.getValue(seat))
+            }
+            registeredHeat.clear(); registeredTemp.clear(); registeredNow.clear()
             call("Vehicle.release") { v.release() }
             vehicle = null
         }

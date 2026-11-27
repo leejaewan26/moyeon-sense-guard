@@ -63,5 +63,5 @@ data class UiState(
 /** 값 표시: 열선 «2단», 온도 «26°C»(말할 때는 [celsius] = «도»). */
 fun fmtValue(item: ItemKey, v: Float, celsius: String = "°C"): String = when (item.kind) {
     ItemKind.SEAT_HEAT -> "${v.roundToInt()}단"
-    ItemKind.CABIN_TEMP -> "${fmt(v)}$celsius"
+    ItemKind.CABIN_TEMP, ItemKind.CABIN_NOW -> "${fmt(v)}$celsius"
 }
