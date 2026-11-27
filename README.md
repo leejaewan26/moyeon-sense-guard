@@ -1,6 +1,6 @@
 # 감각 가드 (Sense Guard)
 
-척수장애처럼 감각이 없는 부위를 위해 열선·실내 온도에 **내 몸 기준 상한**을 두고, 주행 중엔 풀리지 않게 지키는 Pleos Connect 차량 앱입니다.
+척수장애처럼 감각이 없는 부위를 위해 열선·실내 온도에 **내 몸 기준 상한**을 두고, 주행 중엔 풀리지 않게 지키는 Pleos Connect 차량 앱입니다. 여름에는 실내가 너무 뜨거우면 내 자리 통풍과 에어컨을 먼저 켭니다.
 
 현대 기본 열선 자동 하강은 시간 기준이고 누구나 다시 올릴 수 있습니다. 감각 가드는 이렇게 다릅니다.
 
@@ -30,6 +30,7 @@
 - 내 자리 열선이 켜지면 N분마다 한 단씩 자동 하강.
 - "이번 주행만 풀기"는 기어 P에서만. 다음에 다시 P로 돌아오면 가드가 다시 켜집니다.
 - 하차 복원은 최선 노력: 지금 값이 가드가 마지막으로 쓴 값과 같을 때만 원래 값으로 되돌립니다.
+- 여름 과열: 운전석·조수석의 지금 실내 온도 중 높은 값이 **41°C 이상**이면 내 자리 통풍을 최대로, 에어컨을 켜고 알립니다(한 번만). **38°C 이하**로 식으면 다시 대기합니다. "이번 주행만 풀기" 중에는 켜지 않습니다. 좌석 표면 온도 API가 없어서 실내 온도로 판단합니다(좌석은 공기보다 2.8~3.9°C 높음, Vanos 2018 → 공기 41°C ≈ 좌석 44°C, 화상이 시작되는 온도, Moritz 1947).
 
 판정 엔진은 안드로이드 의존 없는 순수 Kotlin(`app/src/main/java/com/moyeon/senseguard/engine/`)이고 JUnit 테스트가 있습니다.
 
@@ -104,6 +105,9 @@ sh ./gradlew test assembleRelease
 | 실내 설정 온도 읽기 | `getHVAC().getHvacTemperature(SeatArea, TemperatureUnit.CELSIUS, onComplete, onFailed)` |
 | 실내 설정 온도 구독 | `getHVAC().registerHvacTemperature(SeatArea, HvacTemperatureListener)` / `unregisterHvacTemperature` |
 | 실내 온도 깎기 | `getHVAC().setHvacTemperature(SeatArea, Float, TemperatureUnit.CELSIUS, onComplete, onFailed)` |
+| 지금 실내 온도 읽기·구독 (여름) | `getHVAC().getHvacTemperatureCurrent(SeatArea, TemperatureUnit.CELSIUS, ...)` / `registerHvacTemperatureCurrent(SeatArea, HvacTemperatureListener)` |
+| 통풍 켜기 (여름) | `getSeat().checkSeatVentilationCapabilities(...)`, `getSeat().setHvacSeatVentilation(SeatArea, Int, ...)` |
+| 에어컨 켜기 (여름) | `getHVAC().checkHvacAcCapabilities(...)`, `getHVAC().setHvacAc(SeatArea, true, ...)` |
 
 Pleos Gear 도메인은 SDK 2.3.2에서 deprecated·공개 문서 제외 → SDK 안내대로 AAOS 표준 GEAR_SELECTION(CarPropertyManager)으로 읽음. `Car.createCar(context)` → `getCarManager(Car.PROPERTY_SERVICE)` 로 얻고, 호출은 전용 스레드에서 합니다.
 
@@ -112,6 +116,7 @@ Pleos Gear 도메인은 SDK 2.3.2에서 deprecated·공개 문서 제외 → SDK
 ## 에뮬레이터에서 확인한 것 / 한계
 
 - 됨: `initialize`, 기어 읽기(AAOS `GEAR_SELECTION` getProperty = 4 GEAR_PARK, registerCallback 등록 성공·등록 직후 PARK 이벤트 수신), 열선 범위(앞좌석 -3~3, 2열 0~3), 열선 읽기·구독(초기값 0), `setHvacSeatTemperature` 의 onComplete 성공 콜백.
+- 여름 과열: 지금 실내 온도 읽기(운전석·조수석 19.1°C, 뒷좌석은 미지원), 통풍 범위(앞좌석 0~3) · `setHvacSeatVentilation` 쓰기 반영(0→1 다시 읽어 확인), `setHvacAc` → true. 디버그 시험 입력 `--es kind now --es value 48`로 경고·통풍 3단·에어컨 켜기까지 확인.
 - 확인 안 됨: `setHvacSeatTemperature` 성공 콜백 뒤에도 같은 좌석을 다시 읽으면 0이고 변화 콜백도 오지 않았습니다. 에뮬레이터가 값을 실제로 바꾸지 않는 것으로 보입니다(실차 미확인).
 - 안 됨: 실내 설정 온도(`HVAC_TEMPERATURE_SET`) 읽기·구독은 `PropertyNotAvailableException` 을 냅니다(공조 꺼짐 상태로 추정). 앱은 죽지 않고 화면의 SDK 호출 기록에 오류를 그대로 남깁니다.
 - 콜백에 '누가 바꿨는지'가 없어서, 본인이 올린 것과 다른 사람이 올린 것을 구분하지 못합니다. 메아리 판별은 "우리가 쓴 값과 같은 값이 처음 들어오면 메아리"로 합니다.

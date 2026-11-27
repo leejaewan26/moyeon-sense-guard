@@ -246,4 +246,56 @@ class GuardEngineTest {
         assertEquals(3f, e.current[driverHeat])   // 풀린 뒤 3단
         assertEquals(3, base.level)                // 기본 차는 30분 안 돼서 3단 유지
     }
+
+    private val driverNow = ItemKey.now(Seat.DRIVER)
+    private val passengerNow = ItemKey.now(Seat.FRONT_PASSENGER)
+
+    @Test
+    fun `지금 실내 온도가 41도 미만이면 아무것도 하지 않는다`() {
+        val e = engine()
+        assertTrue(e.onValue(driverNow, 40.9f, 0).isEmpty())
+        assertFalse(e.hotCabin)
+    }
+
+    @Test
+    fun `41도 이상이면 내 자리 식히기를 한 번 내고, 38도 이하로 식은 뒤 다시 넘으면 또 낸다`() {
+        val e = engine(GuardProfile(seat = Seat.FRONT_PASSENGER))
+        val first = e.onValue(passengerNow, 47f, 0).filterIsInstance<GuardAction.CoolDown>().single()
+        assertEquals(Seat.FRONT_PASSENGER, first.seat)
+        assertEquals(47f, first.celsius)
+        assertEquals(EventKind.COOL, e.events.first().kind)
+        assertTrue(e.onValue(passengerNow, 45f, 1_000).isEmpty())
+        assertTrue(e.onValue(passengerNow, 39f, 2_000).isEmpty())
+        assertTrue(e.hotCabin)
+        assertTrue(e.onValue(passengerNow, 38f, 3_000).isEmpty())
+        assertFalse(e.hotCabin)
+        assertEquals(1, e.onValue(passengerNow, 42f, 4_000).filterIsInstance<GuardAction.CoolDown>().size)
+    }
+
+    @Test
+    fun `가장 뜨거운 구역으로 판단한다`() {
+        val e = engine()
+        e.onValue(driverNow, 30f, 0)
+        val out = e.onValue(passengerNow, 44f, 1_000)
+        assertEquals(Seat.DRIVER, out.filterIsInstance<GuardAction.CoolDown>().single().seat)
+    }
+
+    @Test
+    fun `이번 주행만 풀려 있으면 식히기를 내지 않고 기록만 남긴다`() {
+        val e = engine()
+        e.onGear(Gear.P, 0)
+        assertTrue(e.requestOverride(0))
+        assertTrue(e.onValue(driverNow, 50f, 1_000).isEmpty())
+        assertEquals(EventKind.COOL, e.events.first().kind)
+    }
+
+    @Test
+    fun `지금 실내 온도는 상한 판정이나 쓰기 대상이 아니다`() {
+        val e = engine()
+        e.onValue(driverNow, 60f, 0)
+        e.onGear(Gear.P, 1_000)
+        val out = e.updateProfile(GuardProfile(maxHeatLevel = 1), 2_000)
+        assertTrue(writes(out).none { it.item.kind == ItemKind.CABIN_NOW })
+        assertEquals(60f, e.current[driverNow])
+    }
 }

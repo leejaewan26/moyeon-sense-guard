@@ -23,6 +23,8 @@ interface CarPort {
     fun refresh()
     fun setSeatHeat(seat: Seat, level: Int, onResult: (Boolean) -> Unit)
     fun setCabinTemp(seat: Seat, celsius: Float, onResult: (Boolean) -> Unit)
+    /** 여름 과열: 그 자리 통풍과 에어컨을 켠다(차에 없는 기능은 건너뛴다). */
+    fun startCooling(seat: Seat)
     fun release()
 }
 
@@ -332,6 +334,10 @@ class GuardRuntime(
                     }
                 }
                 is GuardAction.Halted -> raise(eng, a.message, Notices.halted(a.item), warning = true)
+                is GuardAction.CoolDown -> {
+                    raise(eng, a.reason, Notices.cooling(a.seat, a.celsius), warning = true)
+                    car.startCooling(a.seat)
+                }
             }
         }
     }
@@ -341,6 +347,7 @@ class GuardRuntime(
         when (a.item.kind) {
             ItemKind.SEAT_HEAT -> car.setSeatHeat(a.item.seat, a.value.roundToInt(), onResult)
             ItemKind.CABIN_TEMP -> car.setCabinTemp(a.item.seat, a.value, onResult)
+            ItemKind.CABIN_NOW -> Unit // 읽기만 하는 값이라 쓰지 않는다
         }
     }
 

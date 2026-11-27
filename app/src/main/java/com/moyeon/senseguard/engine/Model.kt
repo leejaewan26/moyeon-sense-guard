@@ -19,7 +19,8 @@ enum class AlertMode(val label: String) {
     LIGHT_TEXT("빛·글자"),
 }
 
-enum class ItemKind { SEAT_HEAT, CABIN_TEMP }
+/** SEAT_HEAT·CABIN_TEMP 는 가드가 상한을 거는 값, CABIN_NOW 는 읽기만 하는 지금 실내 온도(여름 과열 판단용). */
+enum class ItemKind { SEAT_HEAT, CABIN_TEMP, CABIN_NOW }
 
 /** 가드가 지키는 항목 하나: (종류, 자리). */
 data class ItemKey(val kind: ItemKind, val seat: Seat) {
@@ -27,11 +28,13 @@ data class ItemKey(val kind: ItemKind, val seat: Seat) {
         get() = when (kind) {
             ItemKind.SEAT_HEAT -> "${seat.label} 열선"
             ItemKind.CABIN_TEMP -> "${seat.label} 실내 온도"
+            ItemKind.CABIN_NOW -> "${seat.label} 지금 실내"
         }
 
     companion object {
         fun heat(seat: Seat) = ItemKey(ItemKind.SEAT_HEAT, seat)
         fun temp(seat: Seat) = ItemKey(ItemKind.CABIN_TEMP, seat)
+        fun now(seat: Seat) = ItemKey(ItemKind.CABIN_NOW, seat)
     }
 }
 
@@ -48,7 +51,7 @@ data class GuardProfile(
     val roleLabel: String get() = if (isDriver) "운전자" else "승객"
 }
 
-enum class EventKind { CLAMP, STEP_DOWN, SUGGEST, HALT, OVERRIDE, OVERRIDE_END, RESTORE, INFO }
+enum class EventKind { CLAMP, STEP_DOWN, SUGGEST, HALT, OVERRIDE, OVERRIDE_END, RESTORE, COOL, INFO }
 
 data class GuardEvent(
     val timeMs: Long,
@@ -65,6 +68,8 @@ sealed interface GuardAction {
     data class Write(val item: ItemKey, val value: Float, val reason: String, val kind: EventKind) : GuardAction
     data class Suggest(val item: ItemKey, val requested: Float, val suggested: Float, val reason: String) : GuardAction
     data class Halted(val item: ItemKey, val message: String) : GuardAction
+    /** 여름 과열: [seat] 의 통풍과 에어컨을 켜라. [celsius] 는 지금 가장 뜨거운 실내 온도. */
+    data class CoolDown(val seat: Seat, val celsius: Float, val reason: String) : GuardAction
 }
 
 fun fmt(v: Float): String =

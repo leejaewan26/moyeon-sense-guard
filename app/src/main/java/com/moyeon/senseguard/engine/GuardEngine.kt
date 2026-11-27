@@ -11,6 +11,7 @@ import kotlin.math.abs
  * - 상한은 프로필의 자리에만 강제. 다른 자리는 제안만. 실내 온도는 승객(조수석) 자기 존만.
  * - 주행 중(기어 P 아님)엔 풀 수 없고, P 에서만 "이번 주행만 풀기". 다음에 P 로 돌아오면 다시 켜진다.
  * - 내 자리 열선이 켜지면 N분마다 한 단씩 자동 하강.
+ * - 여름 과열: 지금 실내 온도가 [HOT_CABIN_C] 이상이 되면 한 번 알리고 내 자리 통풍·에어컨을 켜라고 한다.
  *
  * 시간은 호출하는 쪽이 now(ms) 로 넘긴다(시연 배속·테스트용).
  */
@@ -52,16 +53,19 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
     fun isEnforced(item: ItemKey): Boolean = when (item.kind) {
         ItemKind.SEAT_HEAT -> item.seat == profile.seat
         ItemKind.CABIN_TEMP -> item.seat == profile.seat && profile.seat == Seat.FRONT_PASSENGER
+        ItemKind.CABIN_NOW -> false
     }
 
     fun limitFor(item: ItemKey): Float = when (item.kind) {
         ItemKind.SEAT_HEAT -> profile.maxHeatLevel.toFloat()
         ItemKind.CABIN_TEMP -> profile.cabinTempMaxC
+        ItemKind.CABIN_NOW -> HOT_CABIN_C
     }
 
     fun reasonFor(item: ItemKey): String = when (item.kind) {
         ItemKind.SEAT_HEAT -> "내 설정 · 열선 최대 ${profile.maxHeatLevel}단"
         ItemKind.CABIN_TEMP -> "내 설정 · 실내 온도 최고 ${fmt(profile.cabinTempMaxC)}°C"
+        ItemKind.CABIN_NOW -> "실내 ${fmt(HOT_CABIN_C)}°C 이상 · 좌석이 뜨거울 수 있어요"
     }
 
     /** P(또는 기어 확인 전)에서만 바뀐다. 바뀌면 지금 값에도 바로 적용. */
@@ -107,8 +111,16 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         return evaluate(item, _current[item] ?: return emptyList(), now)
     }
 
+    /** 여름 과열 알림이 켜져 있는지(실내가 식으면 풀린다). */
+    var hotCabin: Boolean = false
+        private set
+
     /** 차에서 들어온 값(콜백 또는 처음 읽은 값). */
     fun onValue(item: ItemKey, value: Float, now: Long): List<GuardAction> {
+        if (item.kind == ItemKind.CABIN_NOW) {
+            _current[item] = value
+            return checkHotCabin(now)
+        }
         val echo = pendingEcho.remove(item)
         if (echo != null && same(echo, value)) {
             _current[item] = value
@@ -160,7 +172,27 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
     // ---- 내부 ----
 
     private fun enforceCurrent(now: Long): List<GuardAction> =
-        _current.entries.toList().flatMap { (item, value) -> evaluate(item, value, now) }
+        _current.entries.toList().filter { it.key.kind != ItemKind.CABIN_NOW }.flatMap { (item, value) -> evaluate(item, value, now) }
+
+    /** 가장 뜨거운 실내 온도로 판단한다. 넘을 때 한 번만 알리고, [HOT_RELEASE_C] 이하로 식으면 다시 알릴 준비를 한다. */
+    private fun checkHotCabin(now: Long): List<GuardAction> {
+        val hottest = _current.filterKeys { it.kind == ItemKind.CABIN_NOW }.values.maxOrNull() ?: return emptyList()
+        if (!hotCabin && hottest >= HOT_CABIN_C - EPS) {
+            hotCabin = true
+            val reason = "실내 ${fmt(hottest)}°C · 좌석이 뜨거울 수 있어요"
+            if (overrideActive) {
+                log(now, EventKind.COOL, null, null, null, "$reason (이번 주행만 풀려 있어 켜지 않음)")
+                return emptyList()
+            }
+            log(now, EventKind.COOL, null, null, null, "$reason · ${profile.seat.label} 통풍·에어컨 켬")
+            return listOf(GuardAction.CoolDown(profile.seat, hottest, reason))
+        }
+        if (hotCabin && hottest <= HOT_RELEASE_C) {
+            hotCabin = false
+            log(now, EventKind.INFO, null, null, null, "실내 ${fmt(hottest)}°C · 과열 알림 풀림")
+        }
+        return emptyList()
+    }
 
     private fun evaluate(item: ItemKey, value: Float, now: Long): List<GuardAction> {
         val limit = limitFor(item)
@@ -212,6 +244,17 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
     companion object {
         const val WINDOW_MS = 60_000L
         const val MAX_CLAMPS = 3
+
+        /**
+         * 여름 과열 기준(실내 공기). 근거 두 가지:
+         * - 피부 화상은 44°C 에서 시작한다(약 6시간, Moritz & Henriques 1947).
+         * - 햇볕·그늘에 세운 차 모두 좌석 표면이 실내 공기보다 약 3~4°C 높았다
+         *   (그늘 38.3 → 41.1, 햇볕 46.7 → 50.6, Vanos 외 2018).
+         * 그래서 실내 공기가 41°C 이면 좌석은 이미 44°C 언저리라고 본다.
+         */
+        const val HOT_CABIN_C = 41f
+        /** 이 온도 이하로 식으면 알림을 푼다(문턱 근처에서 켜졌다 꺼졌다 하지 않게). */
+        const val HOT_RELEASE_C = 38f
         private const val EPS = 0.05f
         private const val MAX_EVENTS = 60
     }
