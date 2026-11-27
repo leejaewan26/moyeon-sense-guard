@@ -11,6 +11,7 @@ import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.ItemKind
 import com.moyeon.senseguard.engine.ScenarioStep
 import com.moyeon.senseguard.engine.Seat
+import com.moyeon.senseguard.engine.fmtValue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
@@ -328,7 +329,7 @@ class GuardRuntime(
                 is GuardAction.Suggest -> {
                     val last = alert
                     if (last == null || clock.elapsedMs() - last.atRealMs > 4_000) {
-                        raise(eng, "제안 · ${a.item.label} ${fmtValue(a.item, a.suggested)} 이하 권장", Notices.suggested(a.item, a.suggested), warning = false)
+                        raise(eng, "권하기만 · ${a.item.label} ${fmtValue(a.item, a.suggested)} 이하", Notices.suggested(a.item, a.suggested), warning = false)
                     }
                 }
                 is GuardAction.Halted -> raise(eng, a.message, Notices.halted(a.item), warning = true)

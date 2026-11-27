@@ -4,10 +4,7 @@ import com.moyeon.senseguard.engine.Gear
 import com.moyeon.senseguard.engine.GuardEvent
 import com.moyeon.senseguard.engine.GuardProfile
 import com.moyeon.senseguard.engine.ItemKey
-import com.moyeon.senseguard.engine.ItemKind
 import com.moyeon.senseguard.engine.Seat
-import com.moyeon.senseguard.engine.fmt
-import kotlin.math.roundToInt
 
 data class SdkLog(val timeMs: Long, val ok: Boolean, val text: String)
 
@@ -60,8 +57,3 @@ data class UiState(
     val testInput: String? = null,
 )
 
-/** 값 표시: 열선 «2단», 온도 «26°C»(말할 때는 [celsius] = «도»). */
-fun fmtValue(item: ItemKey, v: Float, celsius: String = "°C"): String = when (item.kind) {
-    ItemKind.SEAT_HEAT -> "${v.roundToInt()}단"
-    ItemKind.CABIN_TEMP -> "${fmt(v)}$celsius"
-}

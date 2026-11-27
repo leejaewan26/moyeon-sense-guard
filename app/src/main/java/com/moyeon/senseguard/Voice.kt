@@ -2,11 +2,12 @@ package com.moyeon.senseguard
 
 import com.moyeon.senseguard.engine.AlertMode
 import com.moyeon.senseguard.engine.ItemKey
+import com.moyeon.senseguard.engine.fmtValue
 
 /**
  * 알림 한 건. [text] 는 화면 자막이자 말할 문장이다.
  * [speakable]: 말해도 되는 일 — 내 자리 깎음·자동 하강·가드 멈춤·다시 켜짐(명세 «음성 알림 규칙»).
- * 다른 자리 «제안만»은 자막만 낸다.
+ * 다른 자리 «권하기만»은 자막만 낸다.
  */
 data class Notice(val text: String, val speakable: Boolean)
 

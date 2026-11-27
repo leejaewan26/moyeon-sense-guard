@@ -8,7 +8,7 @@ import kotlin.math.abs
  * - 상한을 넘는 값이 들어오면 되돌리지 않고 상한까지 깎는다(clamp).
  * - 우리가 쓴 값의 메아리 콜백은 거른다.
  * - 같은 항목을 60초에 3회 깎으면 그 항목 가드는 멈추고 알린다.
- * - 상한은 프로필의 자리에만 강제. 다른 자리는 제안만. 실내 온도는 승객(조수석) 자기 존만.
+ * - 상한은 프로필의 자리에만 강제. 다른 자리는 권하기만. 실내 온도는 승객(조수석) 자기 존만.
  * - 주행 중(기어 P 아님)엔 풀 수 없고, P 에서만 "이번 주행만 풀기". 다음에 P 로 돌아오면 다시 켜진다.
  * - 내 자리 열선이 켜지면 N분마다 한 단씩 자동 하강.
  *
@@ -167,7 +167,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         if (value <= limit + EPS) return emptyList()
         val reason = reasonFor(item)
         if (!isEnforced(item)) {
-            log(now, EventKind.SUGGEST, item, value, limit, "제안만 · ${item.label} ${fmt(limit)} 이하 권장 (내 자리 아님)")
+            log(now, EventKind.SUGGEST, item, value, limit, "권하기만 · ${item.label} ${fmtValue(item, limit)} 이하를 권해요 (내 자리 아님)")
             return listOf(GuardAction.Suggest(item, value, limit, reason))
         }
         if (overrideActive || item in _halted) return emptyList()
@@ -180,7 +180,7 @@ class GuardEngine(profile: GuardProfile = GuardProfile()) {
         val actions = mutableListOf<GuardAction>(write(item, value, limit, reason, EventKind.CLAMP))
         if (times.size >= MAX_CLAMPS) {
             _halted += item
-            val msg = "${item.label} 가드 멈춤 · 60초에 ${MAX_CLAMPS}번 깎였어요. 누군가 계속 올리고 있어요"
+            val msg = "${item.label} 가드 멈춤 · 60초에 ${MAX_CLAMPS}번 낮췄어요. 누군가 계속 올리고 있어요"
             log(now, EventKind.HALT, item, null, null, msg)
             actions += GuardAction.Halted(item, msg)
         }

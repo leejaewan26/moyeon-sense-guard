@@ -5,6 +5,7 @@ import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.ItemKind
 import com.moyeon.senseguard.engine.Seat
 import com.moyeon.senseguard.engine.fmt
+import com.moyeon.senseguard.engine.fmtValue
 import kotlin.math.roundToInt
 
 /**

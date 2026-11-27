@@ -194,6 +194,14 @@ class GuardRuntimeTest {
     }
 
     @Test
+    fun `다른 자리 제안 자막의 제목은 화면과 같은 낱말 «권하기만»이다`() {
+        val (rt, _) = runtime()
+        car.sink.onGear(Gear.D)
+        car.sink.onValue(ItemKey.heat(Seat.FRONT_PASSENGER), 3f)
+        assertEquals("권하기만 · 조수석 열선 2단 이하", rt.state.value.alert?.headline)
+    }
+
+    @Test
     fun `하차 복원은 P단에서 가드가 깎은 값을 원래 값으로 되돌린다`() {
         val (rt, _) = runtime()
         car.sink.onGear(Gear.D)

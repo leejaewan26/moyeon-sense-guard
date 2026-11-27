@@ -24,7 +24,7 @@ object DemoScenario {
             ScenarioStep.SetGear(0, Gear.P, "주차 상태 · 출발 준비"),
             ScenarioStep.SetGear(5, Gear.D, "기어 D · 주행 시작"),
             ScenarioStep.Request(30, mine, 3f, "${mine.label} 3단 요청"),
-            ScenarioStep.Request(60, ItemKey.heat(otherSeat), 3f, "${otherSeat.label} 열선 3단 (다른 자리 → 제안만)"),
+            ScenarioStep.Request(60, ItemKey.heat(otherSeat), 3f, "${otherSeat.label} 열선 3단 (다른 자리 → 권하기만)"),
             ScenarioStep.Caption(stepDownAt, "${profile.autoStepDownMinutes}분 경과 · 자동 하강"),
             ScenarioStep.Request(stepDownAt + 90, mine, 3f, "주행 중 다시 3단 시도"),
             ScenarioStep.SetGear(stepDownAt + 270, Gear.P, "정차 · 기어 P"),

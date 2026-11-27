@@ -38,7 +38,7 @@ import com.moyeon.senseguard.engine.Gear
 import com.moyeon.senseguard.engine.ItemKey
 import com.moyeon.senseguard.engine.Seat
 import com.moyeon.senseguard.engine.fmt
-import com.moyeon.senseguard.fmtValue
+import com.moyeon.senseguard.engine.fmtValue
 
 @Composable
 fun DashboardScreen(vm: GuardViewModel) {
@@ -127,12 +127,16 @@ private fun MySeatCard(ui: UiState, modifier: Modifier, onRearm: (ItemKey) -> Un
                     32.sp, C.Text, FontWeight.Bold, maxLines = 1,
                 )
                 T(
-                    if (ui.overrideActive) "지금은 풀려 있어 그대로 둬요" else "더 올리면 ${p.maxHeatLevel}단으로 낮춰요",
+                    when {
+                        ui.overrideActive -> "지금은 풀려 있어 그대로 둬요"
+                        halted -> "멈춘 동안은 낮추지 않아요"
+                        else -> "더 올리면 ${p.maxHeatLevel}단으로 낮춰요"
+                    },
                     23.sp, C.Sub, maxLines = 1,
                 )
             }
         }
-        HeatGauge(level, if (ui.overrideActive) null else p.maxHeatLevel, max, Modifier.fillMaxWidth(), height = 64.dp, labels = true)
+        HeatGauge(level, if (ui.overrideActive || halted) null else p.maxHeatLevel, max, Modifier.fillMaxWidth(), height = 64.dp, labels = true)
         Box(Modifier.weight(1f))
 
         val remain = ui.stepDownRemainingSec
@@ -155,11 +159,11 @@ private fun MySeatCard(ui: UiState, modifier: Modifier, onRearm: (ItemKey) -> Un
 @Composable
 private fun RuleTiles(ui: UiState) {
     val p = ui.profile
-    val tempNote = if (p.seat == Seat.FRONT_PASSENGER) "조수석 강제" else "제안만"
+    val tempNote = if (p.seat == Seat.FRONT_PASSENGER) "조수석 강제" else "권하기만"
     val tiles = listOf(
         "열선 상한" to if (p.maxHeatLevel == 0) "끔" else "${p.maxHeatLevel}단",
         "자동 하강" to "${p.autoStepDownMinutes}분마다",
-        "실내 온도 · $tempNote" to "${fmt(p.cabinTempMaxC)}°C까지",
+        "실내 온도 · $tempNote" to "${fmt(p.cabinTempMaxC)}°C", // «까지»를 붙이면 «조수석 강제»·«권하기만» 칸에서 글자가 붙는다
         "알림" to if (p.alertMode == AlertMode.SOUND) "소리로" else "빛·글자로",
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

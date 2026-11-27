@@ -1,5 +1,7 @@
 package com.moyeon.senseguard.engine
 
+import kotlin.math.roundToInt
+
 /** 좌석(= SDK SeatArea 하나). 안드로이드·SDK 의존 없이 엔진에서 쓰는 이름. */
 enum class Seat(val label: String) {
     DRIVER("운전석"),
@@ -65,6 +67,12 @@ sealed interface GuardAction {
     data class Write(val item: ItemKey, val value: Float, val reason: String, val kind: EventKind) : GuardAction
     data class Suggest(val item: ItemKey, val requested: Float, val suggested: Float, val reason: String) : GuardAction
     data class Halted(val item: ItemKey, val message: String) : GuardAction
+}
+
+/** 값 표시: 열선 «2단», 온도 «26°C»(말할 때는 [celsius] = «도»). */
+fun fmtValue(item: ItemKey, v: Float, celsius: String = "°C"): String = when (item.kind) {
+    ItemKind.SEAT_HEAT -> "${v.roundToInt()}단"
+    ItemKind.CABIN_TEMP -> "${fmt(v)}$celsius"
 }
 
 fun fmt(v: Float): String =

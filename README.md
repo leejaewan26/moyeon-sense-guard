@@ -74,7 +74,8 @@ sh ./gradlew test assembleRelease
 | 화면 | 2560x1440 (`adb shell wm size`), 밀도 160 (`adb shell wm density`), 가로 |
 | Vehicle SDK | `ai.pleos.playground:Vehicle:2.3.2` (nexus-playground maven) |
 | 빌드 | Gradle 8.10.2, AGP 8.8.2, Kotlin 2.0.0, Jetpack Compose, compileSdk/targetSdk 35, minSdk 23, JDK 17 |
-| 소리 알림 | Android `ToneGenerator` (TextToSpeech SDK 미사용) |
+| 음성 SDK | `ai.pleos.playground:TextToSpeech:3.3.1` (기기 안 방식 `ON_DEVICE`) |
+| 소리 알림 | Pleos 음성으로 말하고 같은 글을 화면 자막으로 띄움. 음성 초기화가 세 번 실패하거나 말하기 오류가 나면 Android `ToneGenerator` 삐 소리 |
 
 ### 쓰는 권한 (AndroidManifest)
 
@@ -104,6 +105,7 @@ sh ./gradlew test assembleRelease
 | 실내 설정 온도 읽기 | `getHVAC().getHvacTemperature(SeatArea, TemperatureUnit.CELSIUS, onComplete, onFailed)` |
 | 실내 설정 온도 구독 | `getHVAC().registerHvacTemperature(SeatArea, HvacTemperatureListener)` / `unregisterHvacTemperature` |
 | 실내 온도 깎기 | `getHVAC().setHvacTemperature(SeatArea, Float, TemperatureUnit.CELSIUS, onComplete, onFailed)` |
+| 음성 알림 (TextToSpeech SDK 3.3.1) | `TextToSpeech(context, Mode.ON_DEVICE)`, `initialize(OnInitializeListener)`, `addEventListener`, `setLocale(Locale.KOREA)`, `speak(text, false)` |
 
 Pleos Gear 도메인은 SDK 2.3.2에서 deprecated·공개 문서 제외 → SDK 안내대로 AAOS 표준 GEAR_SELECTION(CarPropertyManager)으로 읽음. `Car.createCar(context)` → `getCarManager(Car.PROPERTY_SERVICE)` 로 얻고, 호출은 전용 스레드에서 합니다.
 

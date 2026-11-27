@@ -87,6 +87,23 @@ class GuardEngineTest {
     }
 
     @Test
+    fun `다른 자리 기록은 화면과 같은 낱말 «권하기만»으로 단위를 붙여 적는다`() {
+        val e = engine(GuardProfile(seat = Seat.DRIVER))
+        e.onValue(passengerHeat, 3f, 0)
+        assertEquals("권하기만 · 조수석 열선 2단 이하를 권해요 (내 자리 아님)", e.events.first().text)
+    }
+
+    @Test
+    fun `가드 멈춤 기록은 다른 알림처럼 «낮췄어요»로 적는다`() {
+        val e = engine()
+        repeat(3) { i ->
+            e.onValue(driverHeat, 3f, i * 10_000L)
+            e.onValue(driverHeat, 2f, i * 10_000L + 100) // 메아리
+        }
+        assertEquals("운전석 열선 가드 멈춤 · 60초에 3번 낮췄어요. 누군가 계속 올리고 있어요", e.events.first().text)
+    }
+
+    @Test
     fun `승객 프로필이면 그 좌석만 강제한다`() {
         val e = engine(GuardProfile(seat = Seat.FRONT_PASSENGER))
         assertEquals(2f, writes(e.onValue(passengerHeat, 3f, 0)).single().value)
